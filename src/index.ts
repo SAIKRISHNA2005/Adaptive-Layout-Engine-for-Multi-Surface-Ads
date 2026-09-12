@@ -7,3 +7,4 @@ export * from "./core/scoring";
 export * from "./core/diagnostics";
 export * from "./core/resolver";
 export * from "./measurement/text-measurer";
+export * from "./renderers/render-dom";
