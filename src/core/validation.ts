@@ -90,6 +90,13 @@ export const safeAreaSchema = z.object({
   left: z.number().nonnegative("safeArea.left must be non-negative."),
 });
 
+/** Schema for first-class accessibility constraints. */
+export const accessibilityConstraintsSchema = z.object({
+  minTapTarget: z.number().positive("minTapTarget must be a positive number.").optional(),
+  minContrastRatio: z.number().positive("minContrastRatio must be a positive number.").optional(),
+  touchOnly: z.boolean().optional(),
+});
+
 /** Schema for surface profiles. */
 export const surfaceProfileSchema = z.object({
   id: z.string().min(1, "SurfaceProfile 'id' cannot be empty."),
@@ -97,6 +104,7 @@ export const surfaceProfileSchema = z.object({
   width: z.number().positive("Surface width must be a positive number."),
   height: z.number().positive("Surface height must be a positive number."),
   safeArea: safeAreaSchema.optional(),
+  accessibility: accessibilityConstraintsSchema.optional(),
   minTapTarget: z.number().positive("minTapTarget must be a positive number.").optional(),
   minTextSize: z.number().positive("minTextSize must be a positive number.").optional(),
   viewingDistance: z.enum(["near", "medium", "far"]).optional(),
@@ -196,12 +204,19 @@ export function parseSurfaceProfile(input: unknown): SurfaceProfile {
   const height = typeof raw.height === "number" ? raw.height : undefined;
 
   if (width !== undefined && height !== undefined && width > 0 && height > 0) {
-    // 1. Validate minTapTarget fits within surface bounds
-    if (typeof raw.minTapTarget === "number") {
+    // 1. Validate minTapTarget fits within surface bounds (checking both accessibility.minTapTarget and raw.minTapTarget)
+    const effectiveMinTap =
+      raw.accessibility && typeof raw.accessibility.minTapTarget === "number"
+        ? raw.accessibility.minTapTarget
+        : typeof raw.minTapTarget === "number"
+          ? raw.minTapTarget
+          : undefined;
+
+    if (typeof effectiveMinTap === "number") {
       const minDim = Math.min(width, height);
-      if (raw.minTapTarget > minDim) {
+      if (effectiveMinTap > minDim) {
         issues.push(
-          `surface.minTapTarget (${raw.minTapTarget}px) exceeds surface minimum dimension (${minDim}px) — no valid layout is possible.`,
+          `surface.minTapTarget (${effectiveMinTap}px) exceeds surface minimum dimension (${minDim}px) — no valid layout is possible.`,
         );
       }
     }
@@ -230,7 +245,19 @@ export function parseSurfaceProfile(input: unknown): SurfaceProfile {
     throw new InvalidSurfaceError("Failed to validate SurfaceProfile", issues);
   }
 
-  return data as SurfaceProfile;
+  const surfaceData = data as SurfaceProfile;
+  const accessibility = {
+    minTapTarget: surfaceData.accessibility?.minTapTarget ?? surfaceData.minTapTarget,
+    minContrastRatio: surfaceData.accessibility?.minContrastRatio,
+    touchOnly: surfaceData.accessibility?.touchOnly ?? surfaceData.touchOnly,
+  };
+
+  return {
+    ...surfaceData,
+    accessibility,
+    minTapTarget: accessibility.minTapTarget,
+    touchOnly: accessibility.touchOnly,
+  };
 }
 
 /** Comprehensive validation report detailing all hard constraint compliance metrics for a layout. */
@@ -321,10 +348,12 @@ export function validateLayout(
   for (const el of visibleElements) {
     if (el.type === "button") {
       const specElem = specElementMap.get(el.id);
+      const surfaceMinTap = surface.accessibility?.minTapTarget ?? surface.minTapTarget ?? 0;
+      const isTouchOnly = surface.accessibility?.touchOnly ?? surface.touchOnly ?? false;
       const minRequiredTap = Math.max(
-        surface.minTapTarget ?? 0,
+        surfaceMinTap,
         (specElem && "minTapTarget" in specElem ? specElem.minTapTarget : undefined) ?? 0,
-        surface.touchOnly ? 44 : 0,
+        isTouchOnly ? 44 : 0,
       );
 
       if (minRequiredTap > 0 && (el.width < minRequiredTap - epsilon || el.height < minRequiredTap - epsilon)) {

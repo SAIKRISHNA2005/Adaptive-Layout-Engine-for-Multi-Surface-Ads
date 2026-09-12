@@ -80,6 +80,11 @@ export const CustomSurfaceEditor: React.FC<CustomSurfaceEditorProps> = ({
         bottom: parsedSafeBottom,
         left: parsedSafeLeft,
       },
+      accessibility: {
+        minTapTarget: parsedMinTap,
+        touchOnly: form.touchOnly,
+        minContrastRatio: 4.5,
+      },
       minTapTarget: parsedMinTap,
       minTextSize: parsedMinText,
       viewingDistance: form.viewingDistance,

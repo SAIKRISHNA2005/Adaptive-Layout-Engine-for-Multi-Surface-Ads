@@ -183,10 +183,12 @@ function measureState(
     }
 
     case "button": {
+      const surfaceMinTap = surface.accessibility?.minTapTarget ?? surface.minTapTarget ?? 0;
+      const isTouchOnly = surface.accessibility?.touchOnly ?? surface.touchOnly ?? false;
       const minTap = Math.max(
-        surface.minTapTarget ?? 0,
+        surfaceMinTap,
         elem.type === "button" && elem.minTapTarget ? elem.minTapTarget : 0,
-        surface.touchOnly ? 44 : 36,
+        isTouchOnly ? 44 : 36,
       );
 
       const fontSize = state.fontSize ?? 16;

@@ -92,6 +92,16 @@ export interface SafeArea {
 /** Expected physical viewing distance from the human viewer to the display. */
 export type ViewingDistance = "near" | "medium" | "far";
 
+/** Accessibility-specific constraints applied to touch surfaces and visual readability. */
+export interface AccessibilityConstraints {
+  /** Minimum touch/tap target dimension in pixels (e.g. 44px on mobile, 60px on kiosk). */
+  readonly minTapTarget?: number;
+  /** Minimum WCAG contrast ratio (e.g. 4.5 for AA normal text, 3.0 for large text/UI components). */
+  readonly minContrastRatio?: number;
+  /** Whether the surface is exclusively touch-driven (requiring larger tap targets). */
+  readonly touchOnly?: boolean;
+}
+
 /** Surface profile describing physical screen dimensions and environmental constraints. */
 export interface SurfaceProfile {
   /** Unique machine-readable identifier for the surface (e.g. "mobilePortrait"). */
@@ -104,6 +114,8 @@ export interface SurfaceProfile {
   readonly height: number;
   /** Optional safe area insets to prevent placing elements over hardware cutouts. */
   readonly safeArea?: SafeArea;
+  /** First-class accessibility constraints category (tap targets, contrast ratio, touch input). */
+  readonly accessibility?: AccessibilityConstraints;
   /** Minimum touch/tap target dimension in pixels for touch surfaces (e.g. 44px or 60px). */
   readonly minTapTarget?: number;
   /** Minimum legible text size in pixels (crucial for far-viewing broadcast surfaces). */

@@ -62,6 +62,8 @@ describe("defineSurface and Standard Profiles", () => {
     expect(mobilePortrait.height).toBe(480);
     expect(mobilePortrait.minTapTarget).toBe(44);
     expect(mobilePortrait.touchOnly).toBe(true);
+    expect(mobilePortrait.accessibility?.minTapTarget).toBe(44);
+    expect(mobilePortrait.accessibility?.touchOnly).toBe(true);
     expect(mobilePortrait.safeArea).toBeDefined();
     expect(mobilePortrait.safeArea?.top).toBeGreaterThanOrEqual(40);
   });
@@ -71,6 +73,8 @@ describe("defineSurface and Standard Profiles", () => {
     expect(broadcastLowerThird.height).toBe(250);
     expect(broadcastLowerThird.viewingDistance).toBe("far");
     expect(broadcastLowerThird.minTextSize).toBe(32);
+    expect(broadcastLowerThird.accessibility?.touchOnly).toBe(false);
+    expect(broadcastLowerThird.accessibility?.minContrastRatio).toBe(4.5);
   });
 
   it("verifies retailKiosk matches assignment requirements", () => {
@@ -78,6 +82,9 @@ describe("defineSurface and Standard Profiles", () => {
     expect(retailKiosk.height).toBe(1080);
     expect(retailKiosk.minTapTarget).toBe(60);
     expect(retailKiosk.touchOnly).toBe(true);
+    expect(retailKiosk.accessibility?.minTapTarget).toBe(60);
+    expect(retailKiosk.accessibility?.touchOnly).toBe(true);
+    expect(retailKiosk.accessibility?.minContrastRatio).toBe(4.5);
   });
 
   it("verifies mobileLandscape profile is configured properly", () => {

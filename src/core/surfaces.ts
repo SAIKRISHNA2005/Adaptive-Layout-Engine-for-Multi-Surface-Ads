@@ -41,8 +41,11 @@ export const mobilePortrait: Readonly<SurfaceProfile> = defineSurface({
   width: 320,
   height: 480,
   safeArea: { top: 40, right: 16, bottom: 34, left: 16 },
-  minTapTarget: 44,
-  touchOnly: true,
+  accessibility: {
+    minTapTarget: 44,
+    touchOnly: true,
+    minContrastRatio: 4.5,
+  },
   viewingDistance: "near",
 });
 
@@ -56,8 +59,11 @@ export const mobileLandscape: Readonly<SurfaceProfile> = defineSurface({
   width: 640,
   height: 360,
   safeArea: { top: 16, right: 40, bottom: 20, left: 40 },
-  minTapTarget: 44,
-  touchOnly: true,
+  accessibility: {
+    minTapTarget: 44,
+    touchOnly: true,
+    minContrastRatio: 4.5,
+  },
   viewingDistance: "near",
 });
 
@@ -69,8 +75,11 @@ export const broadcastLowerThird: Readonly<SurfaceProfile> = defineSurface({
   height: 250,
   safeArea: { top: 20, right: 60, bottom: 20, left: 60 },
   minTextSize: 32,
+  accessibility: {
+    touchOnly: false,
+    minContrastRatio: 4.5,
+  },
   viewingDistance: "far",
-  touchOnly: false,
 });
 
 /** Retail interactive kiosk surface profile (1080x1080 square, touch-only, 60px min tap target). */
@@ -80,8 +89,11 @@ export const retailKiosk: Readonly<SurfaceProfile> = defineSurface({
   width: 1080,
   height: 1080,
   safeArea: { top: 48, right: 48, bottom: 48, left: 48 },
-  minTapTarget: 60,
-  touchOnly: true,
+  accessibility: {
+    minTapTarget: 60,
+    touchOnly: true,
+    minContrastRatio: 4.5,
+  },
   viewingDistance: "medium",
 });
 
@@ -92,8 +104,11 @@ export const stressTestSurface: Readonly<SurfaceProfile> = defineSurface({
   width: 240,
   height: 320,
   safeArea: { top: 12, right: 10, bottom: 12, left: 10 },
-  minTapTarget: 44,
-  touchOnly: true,
+  accessibility: {
+    minTapTarget: 44,
+    touchOnly: true,
+    minContrastRatio: 4.5,
+  },
   viewingDistance: "near",
 });
 

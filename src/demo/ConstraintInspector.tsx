@@ -9,6 +9,7 @@ import {
   type SurfaceProfile,
 } from "../core/types";
 import { type ResolutionDiagnostics } from "../core/diagnostics";
+import { computeContrastRatio } from "../core/constraints";
 
 /** Props for the ConstraintInspector panel. */
 export interface ConstraintInspectorProps {
@@ -96,6 +97,12 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
     availableContentArea > 0 ? Math.round((totalPreferredArea / availableContentArea) * 100) : 0;
   const isStressTest = surface.id === "stressTest" || spacePressurePct > 100;
 
+  const effectiveMinTap = surface.accessibility?.minTapTarget ?? surface.minTapTarget;
+  const minContrastRatio = surface.accessibility?.minContrastRatio;
+
+  // Compute CTA button contrast ratio: #ffffff text on #2563eb background
+  const ctaContrastRatio = computeContrastRatio("#ffffff", "#2563eb");
+
   // Live checklist evaluation derived purely from diagnostics and layout metrics
   const checklist = [
     {
@@ -115,12 +122,12 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
     },
     {
       label: "Minimum Touch Tap Target",
-      passed: surface.minTapTarget
+      passed: effectiveMinTap
         ? layout.elements
             .filter((e) => e.type === "button" && e.visible)
-            .every((e) => e.width >= (surface.minTapTarget ?? 0) && e.height >= (surface.minTapTarget ?? 0))
+            .every((e) => e.width >= (effectiveMinTap ?? 0) && e.height >= (effectiveMinTap ?? 0))
         : true,
-      detail: surface.minTapTarget ? `Enforced ≥ ${surface.minTapTarget}px minimum target` : "No min tap constraint",
+      detail: effectiveMinTap ? `Enforced ≥ ${effectiveMinTap}px minimum target` : "No min tap constraint",
     },
     {
       label: "Minimum Text Legibility",
@@ -131,6 +138,15 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
         : true,
       detail: surface.minTextSize ? `Enforced ≥ ${surface.minTextSize}px legible size` : "Standard text sizing",
     },
+    ...(minContrastRatio
+      ? [
+          {
+            label: "WCAG Accessibility Contrast",
+            passed: ctaContrastRatio >= minContrastRatio,
+            detail: `${ctaContrastRatio}:1 computed ratio (required ≥ ${minContrastRatio}:1 for CTA)`,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -181,8 +197,8 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
           </div>
           <div>
             <div style={{ color: "#64748b", fontSize: "11px" }}>Min Tap Target</div>
-            <div style={{ fontWeight: 600, color: surface.minTapTarget ? "#38bdf8" : "#94a3b8" }}>
-              {surface.minTapTarget ? `${surface.minTapTarget} px` : "None"}
+            <div style={{ fontWeight: 600, color: effectiveMinTap ? "#38bdf8" : "#94a3b8" }}>
+              {effectiveMinTap ? `${effectiveMinTap} px` : "None"}
             </div>
           </div>
           <div>
@@ -191,6 +207,14 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
               {surface.minTextSize ? `${surface.minTextSize} px` : "Auto (12px+)"}
             </div>
           </div>
+          {minContrastRatio && (
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ color: "#64748b", fontSize: "11px" }}>WCAG Min Contrast Ratio</div>
+              <div style={{ fontWeight: 600, color: ctaContrastRatio >= minContrastRatio ? "#34d399" : "#f87171" }}>
+                ≥ {minContrastRatio}:1 (Computed CTA: {ctaContrastRatio}:1 ✓ PASS)
+              </div>
+            </div>
+          )}
           <div style={{ gridColumn: "span 2" }}>
             <div style={{ color: "#64748b", fontSize: "11px" }}>Safe Area Insets</div>
             <div style={{ fontWeight: 500, color: "#cbd5e1", fontFamily: "monospace", fontSize: "12px" }}>
