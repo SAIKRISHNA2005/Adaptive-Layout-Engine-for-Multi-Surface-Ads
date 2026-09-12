@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { App } from "../src/demo/App";
 
-describe("App Shell (Phase 7 - Multi-Surface Live Switching)", () => {
+describe("App Shell (Phase 7 & 8 - Multi-Surface Live Switching & Tooling)", () => {
   it("renders with default mobile portrait surface and displays all 5 elements", () => {
     render(<App />);
 
@@ -17,6 +17,10 @@ describe("App Shell (Phase 7 - Multi-Surface Live Switching)", () => {
     // All elements in default demo ad spec rendered
     expect(screen.getByText(/Sound Beyond Silence/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Order AeroTune Pro Now/i })).toBeInTheDocument();
+
+    // R&D Tooling panels rendered
+    expect(screen.getByText(/Surface Profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/Resolution Trace/i)).toBeInTheDocument();
   });
 
   it("switches to broadcast lower-third surface producing UltraWideRibbon composition", () => {
@@ -29,7 +33,7 @@ describe("App Shell (Phase 7 - Multi-Surface Live Switching)", () => {
     expect(container.style.width).toBe("1920px");
     expect(container.style.height).toBe("250px");
 
-    expect(screen.getByText(/Archetype: UltraWideRibbon/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/UltraWideRibbon/i).length).toBeGreaterThan(0);
   });
 
   it("switches to mobile landscape surface producing HorizontalSplit 2-column composition", () => {
@@ -42,7 +46,7 @@ describe("App Shell (Phase 7 - Multi-Surface Live Switching)", () => {
     expect(container.style.width).toBe("640px");
     expect(container.style.height).toBe("360px");
 
-    expect(screen.getByText(/Archetype: HorizontalSplit/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/HorizontalSplit/i).length).toBeGreaterThan(0);
   });
 
   it("switches to retail kiosk surface producing 1080x1080 square composition", () => {

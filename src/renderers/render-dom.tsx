@@ -20,6 +20,10 @@ export interface RenderedAdProps {
   readonly spec: AdSpec;
   /** Whether to render subtle color-coded debug outlines reflecting element degradation status. */
   readonly debugOutlines?: boolean;
+  /** Currently hovered element ID for cross-component inspection highlighting. */
+  readonly hoveredElementId?: string | null;
+  /** Callback fired when an element hover state changes. */
+  readonly onHoverElement?: (elementId: string | null) => void;
   /** Optional custom CSS class name for the outer container. */
   readonly className?: string;
   /** Optional container style overrides. */
@@ -64,6 +68,8 @@ export const RenderedAd: FC<RenderedAdProps> = ({
   surface,
   spec,
   debugOutlines = true,
+  hoveredElementId,
+  onHoverElement,
   className,
   style,
 }) => {
@@ -105,6 +111,7 @@ export const RenderedAd: FC<RenderedAdProps> = ({
     >
       {activeElements.map((resolved: ResolvedElement) => {
         const specElem = specElementMap.get(resolved.id);
+        const isHovered = hoveredElementId === resolved.id;
         const debugStyle = debugOutlines ? STATUS_OUTLINE_STYLES[resolved.status] : undefined;
 
         const containerStyle: CSSProperties = {
@@ -117,10 +124,13 @@ export const RenderedAd: FC<RenderedAdProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          outline: debugStyle?.border,
-          backgroundColor: debugStyle?.bg,
+          outline: isHovered ? "2px solid #38bdf8" : debugStyle?.border,
+          boxShadow: isHovered ? "0 0 16px rgba(56, 189, 248, 0.5)" : "none",
+          zIndex: isHovered ? 10 : 1,
+          backgroundColor: isHovered ? "rgba(56, 189, 248, 0.12)" : debugStyle?.bg,
           borderRadius: resolved.type === "button" ? "8px" : "4px",
-          transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+          cursor: "pointer",
         };
 
         return (
@@ -131,6 +141,8 @@ export const RenderedAd: FC<RenderedAdProps> = ({
             data-status={resolved.status}
             data-role={resolved.role}
             style={containerStyle}
+            onMouseEnter={() => onHoverElement?.(resolved.id)}
+            onMouseLeave={() => onHoverElement?.(null)}
           >
             {/* TEXT ELEMENT */}
             {resolved.type === "text" && (
@@ -216,7 +228,7 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                 style={{
                   width: "100%",
                   height: "100%",
-                  backgroundColor: "#2563eb",
+                  backgroundColor: isHovered ? "#1d4ed8" : "#2563eb",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",

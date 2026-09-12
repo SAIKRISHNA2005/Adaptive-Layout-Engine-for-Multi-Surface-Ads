@@ -10,3 +10,5 @@ export * from "./measurement/text-measurer";
 export * from "./renderers/render-dom";
 export * from "./demo/adSpec";
 export * from "./demo/SurfacePicker";
+export * from "./demo/ConstraintInspector";
+export * from "./demo/ResolutionTrace";
