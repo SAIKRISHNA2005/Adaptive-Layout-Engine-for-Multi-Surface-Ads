@@ -2,4 +2,5 @@
 export * from "./core/types";
 export * from "./core/spec";
 export * from "./core/surfaces";
+export * from "./core/validation";
 export * from "./core/resolver";

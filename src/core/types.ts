@@ -180,26 +180,42 @@ export interface ResolvedLayout {
   readonly metrics: LayoutMetrics;
 }
 
+/** Custom typed error thrown when schema or semantic validation fails, listing all encountered issues. */
+export class ValidationError extends Error {
+  constructor(
+    message: string,
+    readonly issues: readonly string[] = [],
+  ) {
+    super(
+      issues.length > 0
+        ? `${message}:\n${issues.map((issue) => `  - ${issue}`).join("\n")}`
+        : message,
+    );
+    this.name = "ValidationError";
+  }
+}
+
 /** Custom typed error thrown when an ad spec contains duplicate element IDs. */
-export class DuplicateElementIdError extends Error {
+export class DuplicateElementIdError extends ValidationError {
   constructor(readonly duplicateId: string) {
-    super(`Duplicate element ID detected in AdSpec: "${duplicateId}". All element IDs must be unique.`);
+    const msg = `Duplicate element ID detected in AdSpec: "${duplicateId}". All element IDs must be unique.`;
+    super(msg, [msg]);
     this.name = "DuplicateElementIdError";
   }
 }
 
 /** Custom typed error thrown when an input specification fails schema or sanity checks. */
-export class InvalidSpecError extends Error {
-  constructor(message: string, readonly issues?: readonly string[]) {
-    super(message);
+export class InvalidSpecError extends ValidationError {
+  constructor(message: string, issues: readonly string[] = []) {
+    super(message, issues.length > 0 ? issues : [message]);
     this.name = "InvalidSpecError";
   }
 }
 
 /** Custom typed error thrown when a surface profile fails dimension or constraint checks. */
-export class InvalidSurfaceError extends Error {
-  constructor(message: string) {
-    super(message);
+export class InvalidSurfaceError extends ValidationError {
+  constructor(message: string, issues: readonly string[] = []) {
+    super(message, issues.length > 0 ? issues : [message]);
     this.name = "InvalidSurfaceError";
   }
 }

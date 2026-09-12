@@ -1,11 +1,7 @@
 // Builder helpers and schema definitions for declarative, surface-agnostic ad specifications.
 
-import {
-  DuplicateElementIdError,
-  InvalidSpecError,
-  type AdElement,
-  type AdSpec,
-} from "./types";
+import { type AdElement, type AdSpec } from "./types";
+import { parseAdSpec } from "./validation";
 
 /** Input specification type for the defineAd factory function. */
 export interface AdSpecInput {
@@ -32,39 +28,14 @@ function deepFreeze<T>(object: T): Readonly<T> {
 
 /**
  * Creates, validates, and returns an immutable, deeply frozen AdSpec.
- * Rejects duplicate element IDs with a typed DuplicateElementIdError.
+ * Validates through the central parseAdSpec runtime validation engine.
  *
  * @param input - The raw ad specification containing elements and metadata.
  * @returns A validated, deeply frozen AdSpec object.
  * @throws {DuplicateElementIdError} If any element ID is used more than once.
- * @throws {InvalidSpecError} If the spec is empty or invalid.
+ * @throws {ValidationError} If the spec fails structural or schema validation.
  */
 export function defineAd(input: AdSpecInput): Readonly<AdSpec> {
-  if (!input || !Array.isArray(input.elements)) {
-    throw new InvalidSpecError("AdSpec must contain an 'elements' array.");
-  }
-
-  if (input.elements.length === 0) {
-    throw new InvalidSpecError("AdSpec cannot be empty; at least one element is required.");
-  }
-
-  const seenIds = new Set<string>();
-
-  for (const element of input.elements) {
-    if (!element || typeof element.id !== "string" || element.id.trim() === "") {
-      throw new InvalidSpecError("Every element in AdSpec must possess a valid, non-empty 'id'.");
-    }
-
-    if (seenIds.has(element.id)) {
-      throw new DuplicateElementIdError(element.id);
-    }
-    seenIds.add(element.id);
-  }
-
-  const spec: AdSpec = {
-    id: input.id,
-    elements: [...input.elements],
-  };
-
-  return deepFreeze(spec);
+  const validated = parseAdSpec(input);
+  return deepFreeze(validated);
 }

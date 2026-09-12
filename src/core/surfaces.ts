@@ -1,9 +1,7 @@
 // Standard surface profile definitions (mobile, kiosk, broadcast lower-third) and surface constraint schemas.
 
-import {
-  InvalidSurfaceError,
-  type SurfaceProfile,
-} from "./types";
+import { type SurfaceProfile } from "./types";
+import { parseSurfaceProfile } from "./validation";
 
 /** Input payload for defining a surface profile via defineSurface. */
 export type SurfaceProfileInput = SurfaceProfile;
@@ -25,33 +23,15 @@ function deepFreeze<T>(object: T): Readonly<T> {
 
 /**
  * Creates, validates, and returns an immutable, deeply frozen SurfaceProfile.
+ * Validates through the central parseSurfaceProfile runtime validation engine.
  *
  * @param profile - The physical dimensions and hardware constraints for a target surface.
  * @returns A validated, deeply frozen SurfaceProfile object.
- * @throws {InvalidSurfaceError} If width or height are non-positive or invalid.
+ * @throws {ValidationError} If the profile violates physical or dimensional constraints.
  */
 export function defineSurface(profile: SurfaceProfileInput): Readonly<SurfaceProfile> {
-  if (!profile || typeof profile.width !== "number" || typeof profile.height !== "number") {
-    throw new InvalidSurfaceError("Surface profile must specify valid numerical 'width' and 'height'.");
-  }
-
-  if (profile.width <= 0 || profile.height <= 0) {
-    throw new InvalidSurfaceError(
-      `Surface dimensions must be positive numbers. Received width=${profile.width}, height=${profile.height}.`,
-    );
-  }
-
-  if (profile.safeArea) {
-    const { top, right, bottom, left } = profile.safeArea;
-    if (top < 0 || right < 0 || bottom < 0 || left < 0) {
-      throw new InvalidSurfaceError("Safe area insets cannot be negative values.");
-    }
-    if (top + bottom >= profile.height || left + right >= profile.width) {
-      throw new InvalidSurfaceError("Safe area insets exceed surface dimensions.");
-    }
-  }
-
-  return deepFreeze({ ...profile });
+  const validated = parseSurfaceProfile(profile);
+  return deepFreeze(validated);
 }
 
 /** Mobile portrait interstitial surface profile (320x480, touch-enabled, 44px min tap target). */
