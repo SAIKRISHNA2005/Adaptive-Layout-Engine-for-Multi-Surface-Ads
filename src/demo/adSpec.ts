@@ -42,7 +42,6 @@ export const defaultDemoAdSpec: Readonly<AdSpec> = defineAd({
       preferredWidth: 360,
       preferredHeight: 270,
       canShrink: true,
-      canDrop: false,
       alt: "AeroTune Pro Wireless ANC Headphones",
     },
     {

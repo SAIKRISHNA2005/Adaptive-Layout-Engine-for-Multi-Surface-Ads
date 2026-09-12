@@ -218,6 +218,19 @@ export function parseSurfaceProfile(input: unknown): SurfaceProfile {
         issues.push(
           `surface.minTapTarget (${effectiveMinTap}px) exceeds surface minimum dimension (${minDim}px) — no valid layout is possible.`,
         );
+      } else if (raw.safeArea) {
+        const safeLeft = typeof raw.safeArea.left === "number" ? raw.safeArea.left : 0;
+        const safeRight = typeof raw.safeArea.right === "number" ? raw.safeArea.right : 0;
+        const safeTop = typeof raw.safeArea.top === "number" ? raw.safeArea.top : 0;
+        const safeBottom = typeof raw.safeArea.bottom === "number" ? raw.safeArea.bottom : 0;
+        const availW = Math.max(0, width - (safeLeft + safeRight));
+        const availH = Math.max(0, height - (safeTop + safeBottom));
+        const minContentDim = Math.min(availW, availH);
+        if (effectiveMinTap > minContentDim) {
+          issues.push(
+            `surface.minTapTarget (${effectiveMinTap}px) exceeds safe content area dimension (${minContentDim}px) — no valid layout is possible.`,
+          );
+        }
       }
     }
 

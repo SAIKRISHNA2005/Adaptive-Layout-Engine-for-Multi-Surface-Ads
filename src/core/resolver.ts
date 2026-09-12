@@ -173,8 +173,8 @@ function measureState(
         baseHeight = Math.round(baseWidth / aspectRatio);
       }
 
-      const minW = Math.max(elem.minWidth ?? 24, 24);
-      const minH = Math.max(elem.minHeight ?? 24, Math.round(minW / aspectRatio));
+      const minW = Math.max(elem.minWidth ?? 12, 12);
+      const minH = Math.max(elem.minHeight ?? 12, Math.round(minW / aspectRatio));
 
       const width = Math.max(minW, Math.min(availableWidth, Math.round(baseWidth * state.scale)));
       const height = Math.max(minH, Math.min(availableHeight, Math.round(baseHeight * state.scale)));
@@ -206,10 +206,13 @@ function measureState(
         elem.minWidth ?? 0,
         Math.min(availableWidth, labelMeasured.width + horizontalPadding),
       );
-      const height = Math.max(
-        minTap,
-        elem.minHeight ?? 0,
-        labelMeasured.height + verticalPadding,
+      const height = Math.min(
+        availableHeight,
+        Math.max(
+          minTap,
+          elem.minHeight ?? 0,
+          labelMeasured.height + verticalPadding,
+        ),
       );
 
       return { width, height, fontSize };
@@ -411,7 +414,8 @@ function placeUltraWideRibbon(
   }
 
   // 4. Headline & Price in center column
-  const centerColWidth = Math.max(100, contentX + availableWidth - (ctaW > 0 ? ctaW + gap : 0) - currentX);
+  const remainingColWidth = Math.max(0, contentX + availableWidth - (ctaW > 0 ? ctaW + gap : 0) - currentX);
+  const centerColWidth = Math.min(availableWidth, Math.max(10, remainingColWidth));
   const measuredTextItems = textStates.map((st) => ({
     state: st,
     measured: measureState(st, surface, centerColWidth, availableHeight, measurer),
@@ -595,21 +599,44 @@ function buildCandidateLayout(
  * Applies a single atomic degradation step to an element state according to its role and type ladder.
  * Returns the descriptive decision string if degraded, or null if the element's ladder is fully exhausted.
  */
-function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): string | null {
+function degradeElement(
+  state: ElementWorkingState,
+  surface: SurfaceProfile,
+  isEmergency = false,
+): string | null {
+  if (!state.visible) return null;
+
+  // Explicit canDrop: false strictly forbids dropping under any condition
+  const isStrictlyNonDroppable = state.original.canDrop === false;
+
+  if (isEmergency) {
+    if (isStrictlyNonDroppable || state.role === "action") {
+      if (isStrictlyNonDroppable && !state.decisions.some((d) => d.includes("canDrop=false"))) {
+        const decision = `Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`;
+        state.decisions.push(decision);
+      }
+      return null;
+    }
+    state.visible = false;
+    state.status = "dropped";
+    const decision = `Dropped element under extreme spatial starvation: insufficient surface dimensions to contain element.`;
+    state.decisions.push(decision);
+    return decision;
+  }
+
   state.ladderStep++;
 
   // 1. Droppable / Branding role elements: shrink -> reposition -> drop
-  const isDroppable =
-    state.original.canDrop === true ||
-    (state.original.canDrop !== false &&
-      (state.role === "branding" || state.priority >= 3));
+  const isStandardDroppable =
+    !isStrictlyNonDroppable &&
+    (state.original.canDrop === true || state.role === "branding" || state.priority >= 3);
 
-  if (state.role === "branding" || (state.priority >= 3 && isDroppable)) {
+  if (state.role === "branding" || (state.priority >= 3 && isStandardDroppable)) {
     if (state.ladderStep === 1) {
       if (state.scale > 0.6 && state.original.canShrink !== false) {
         state.scale = 0.6;
         state.status = "shrunk";
-        const decision = `Shrunk branding/secondary element to 60% scale.`;
+        const decision = `Shrunk branding element to 60% scale.`;
         state.decisions.push(decision);
         return decision;
       }
@@ -622,7 +649,7 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
         return decision;
       }
     } else if (state.ladderStep >= 3) {
-      if (isDroppable && state.visible) {
+      if (isStandardDroppable && state.visible) {
         state.visible = false;
         state.status = "dropped";
         const decision = `Dropped: priority ${state.priority}, canDrop=true, insufficient space remaining.`;
@@ -632,17 +659,13 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
     }
   }
 
-  // Non-droppable element explicitly marked canDrop=false
-  if (state.original.canDrop === false && state.ladderStep >= 3) {
-    if (!state.decisions.some((d) => d.includes("canDrop=false"))) {
-      const decision = `Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`;
-      state.decisions.push(decision);
-    }
-  }
-
-  // 2. Text element ladder: shrink font -> wrap -> truncate -> drop (if droppable)
+  // 2. Text element ladder: shrink font -> wrap -> progressive truncate -> drop (if droppable)
   if (state.type === "text") {
-    if (state.original.canShrink !== false && state.fontSize && state.fontSize > state.minFontSize) {
+    if (
+      state.original.canShrink !== false &&
+      state.fontSize &&
+      state.fontSize > state.minFontSize
+    ) {
       const stepDown = Math.max(state.minFontSize, state.fontSize - 4);
       const oldFont = state.fontSize;
       state.fontSize = stepDown;
@@ -652,17 +675,26 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
       return decision;
     }
 
-    if (state.original.canTruncate !== false && state.displayText.length > 20) {
-      const truncateLength = Math.max(16, Math.floor(state.displayText.length * 0.5));
-      state.displayText = state.displayText.slice(0, truncateLength).trim() + "...";
-      state.isTruncated = true;
-      state.status = "truncated";
-      const decision = `Truncated text copy with ellipsis to fit safe boundary.`;
-      state.decisions.push(decision);
-      return decision;
+    if (state.original.canTruncate !== false && state.displayText.length > 5) {
+      const words = state.displayText.replace(/\.\.\.$/, "").trim().split(/\s+/).filter(Boolean);
+      if (words.length > 2) {
+        state.displayText = `${words[0]} ${words[1]}...`;
+        state.isTruncated = true;
+        state.status = "truncated";
+        const decision = `Truncated text copy to '${state.displayText}' to fit safe boundary.`;
+        state.decisions.push(decision);
+        return decision;
+      } else if (words.length === 2) {
+        state.displayText = `${words[0]}...`;
+        state.isTruncated = true;
+        state.status = "truncated";
+        const decision = `Truncated text copy to single keyword '${state.displayText}'.`;
+        state.decisions.push(decision);
+        return decision;
+      }
     }
 
-    if (isDroppable && state.visible) {
+    if (isStandardDroppable && state.visible) {
       state.visible = false;
       state.status = "dropped";
       const decision = `Dropped text element: priority ${state.priority}, role=${state.role}, insufficient space remaining.`;
@@ -671,17 +703,17 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
     }
   }
 
-  // 3. Image element ladder: scale down -> crop -> drop (if droppable)
+  // 3. Image element ladder: scale down -> drop (if droppable)
   if (state.type === "image") {
-    if (state.original.canShrink !== false && state.scale > 0.25) {
-      state.scale = Math.max(0.2, Math.round((state.scale - 0.2) * 100) / 100);
+    if (state.original.canShrink !== false && state.scale > 0.15) {
+      state.scale = Math.max(0.1, Math.round((state.scale - 0.25) * 100) / 100);
       state.status = "shrunk";
       const decision = `Scaled image dimensions to ${Math.round(state.scale * 100)}% to fit available space.`;
       state.decisions.push(decision);
       return decision;
     }
 
-    if (isDroppable && state.visible) {
+    if (isStandardDroppable && state.visible) {
       state.visible = false;
       state.status = "dropped";
       const decision = `Dropped image element: priority ${state.priority}, role=${state.role}, insufficient space remaining.`;
@@ -690,19 +722,46 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
     }
   }
 
-  // 4. Button element ladder: shrink padding (NEVER below minTapTarget)
+  // 4. Button element ladder: shrink padding -> reduce font -> compact copy (NEVER below minTapTarget)
   if (state.type === "button") {
-    if (state.original.canShrink !== false && state.scale > 0.5) {
-      state.scale = 0.5;
+    if (state.original.canShrink !== false && state.scale > 0.3) {
+      state.scale = Math.max(0.2, Math.round((state.scale - 0.3) * 100) / 100);
       state.status = "shrunk";
       const decision = `Reduced button internal padding to fit available space while maintaining minTapTarget (${surface.minTapTarget ?? 44}px).`;
       state.decisions.push(decision);
       return decision;
     }
+
+    const minBtnFont = Math.max(surface.minTextSize ?? 12, 12);
+    if (state.fontSize && state.fontSize > minBtnFont) {
+      const stepDown = Math.max(minBtnFont, state.fontSize - 2);
+      state.fontSize = stepDown;
+      state.status = "shrunk";
+      const decision = `Reduced button font size to ${stepDown}px.`;
+      state.decisions.push(decision);
+      return decision;
+    }
+
+    if (state.displayText.length > 8) {
+      const words = state.displayText.split(/\s+/).filter(Boolean);
+      if (words.length > 2) {
+        state.displayText = `${words[0]} ${words[1]}`;
+        state.status = "truncated";
+        const decision = `Compacted button copy to '${state.displayText}'.`;
+        state.decisions.push(decision);
+        return decision;
+      } else if (words.length === 2 && words[0]) {
+        state.displayText = words[0];
+        state.status = "truncated";
+        const decision = `Compacted button copy to single action word '${state.displayText}'.`;
+        state.decisions.push(decision);
+        return decision;
+      }
+    }
   }
 
   // Final check for non-droppable non-shrinkable elements
-  if (state.original.canDrop === false || state.original.canShrink === false) {
+  if (isStrictlyNonDroppable || state.original.canShrink === false) {
     if (!state.decisions.some((d) => d.includes("canDrop=false"))) {
       const decision = `Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`;
       state.decisions.push(decision);
@@ -710,6 +769,17 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
   }
 
   return null;
+}
+
+/** Computes priority score for degradation ordering (higher degrades earlier). */
+function getDegradationPriority(state: ElementWorkingState): number {
+  let score = state.priority * 10;
+  if (state.role === "branding") score += 20;
+  else if (state.role === "secondary") score += 10;
+  else if (state.role === "hero") score += 5;
+  else if (state.role === "primary") score += 0;
+  else if (state.role === "action") score -= 20;
+  return score;
 }
 
 /**
@@ -772,24 +842,14 @@ export function resolveWithDiagnostics(
 
   // 4. Priority-ordered degradation loop if constraint violations exist
   if (!validation.isValid) {
-    const roleDegradationRank: Record<ElementRole, number> = {
-      branding: 1,
-      secondary: 2,
-      action: 3,
-      primary: 4,
-      hero: 5,
-    };
-
     const degradationQueue = [...workingStates].sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return b.priority - a.priority;
-      }
-      return roleDegradationRank[a.role] - roleDegradationRank[b.role];
+      return getDegradationPriority(b) - getDegradationPriority(a);
     });
 
-    const maxIterations = 60;
+    const maxIterations = 80;
     let iterations = 0;
 
+    // Pass 1: Standard progressive degradation ladder
     for (const targetState of degradationQueue) {
       if (validation.isValid || iterations >= maxIterations) {
         break;
@@ -798,7 +858,7 @@ export function resolveWithDiagnostics(
       let canDegradeFurther = true;
       while (canDegradeFurther && !validation.isValid && iterations < maxIterations) {
         iterations++;
-        const decisionText = degradeElement(targetState, surface);
+        const decisionText = degradeElement(targetState, surface, false);
 
         if (decisionText) {
           diagnostics.record(
@@ -814,6 +874,33 @@ export function resolveWithDiagnostics(
           );
         } else {
           canDegradeFurther = false;
+        }
+      }
+    }
+
+    // Pass 2: Emergency drop under severe spatial starvation (protecting CTA and canDrop=false)
+    if (!validation.isValid) {
+      for (const targetState of degradationQueue) {
+        if (validation.isValid || iterations >= maxIterations) {
+          break;
+        }
+        if (!targetState.visible) continue;
+
+        iterations++;
+        const decisionText = degradeElement(targetState, surface, true);
+
+        if (decisionText) {
+          diagnostics.record(
+            "degrade",
+            `Degraded element '${targetState.id}': ${decisionText}`,
+            targetState.id,
+          );
+          currentLayout = buildCandidateLayout(workingStates, surface, measurer);
+          validation = validateLayout(currentLayout, surface, spec);
+          diagnostics.record(
+            "validate",
+            `Post-degradation check: ${validation.isValid ? "Resolved! All constraints satisfied." : `${validation.hardViolations.length} violations remaining.`}`,
+          );
         }
       }
     }

@@ -57,10 +57,12 @@ export function everyKeptTapTargetMeetsMinimum(
 
   for (const el of visibleButtons) {
     const specElem = specElementMap.get(el.id);
+    const surfaceMinTap = surface.accessibility?.minTapTarget ?? surface.minTapTarget ?? 0;
+    const isTouchOnly = surface.accessibility?.touchOnly ?? surface.touchOnly ?? false;
     const minRequiredTap = Math.max(
-      surface.minTapTarget ?? 0,
+      surfaceMinTap,
       (specElem && "minTapTarget" in specElem ? specElem.minTapTarget : undefined) ?? 0,
-      surface.touchOnly ? 44 : 0,
+      isTouchOnly ? 44 : 0,
     );
 
     if (minRequiredTap > 0) {
