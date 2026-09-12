@@ -8,8 +8,11 @@ import {
   ValidationError,
   type AdElement,
   type AdSpec,
+  type ResolvedElement,
+  type ResolvedLayout,
   type SurfaceProfile,
 } from "./types";
+import { rectsOverlap } from "./scoring";
 
 /** Zod schema for element roles within the ad visual hierarchy. */
 export const elementRoleSchema = z.enum(["primary", "hero", "action", "branding", "secondary"]);
@@ -228,6 +231,133 @@ export function parseSurfaceProfile(input: unknown): SurfaceProfile {
   }
 
   return data as SurfaceProfile;
+}
+
+/** Comprehensive validation report detailing all hard constraint compliance metrics for a layout. */
+export interface LayoutValidationResult {
+  /** Complete list of human-readable hard constraint violation descriptions. */
+  readonly hardViolations: readonly string[];
+  /** Pairs of element IDs that overlap each other. */
+  readonly overlaps: readonly (readonly [string, string])[];
+  /** Element IDs clipped outside surface boundaries or safe areas. */
+  readonly clipped: readonly string[];
+  /** Element IDs failing minimum touch/tap target size requirements. */
+  readonly tapTargetViolations: readonly string[];
+  /** Element IDs failing minimum text size requirements. */
+  readonly textSizeViolations: readonly string[];
+  /** Whether the layout satisfies 100% of hard constraints. */
+  readonly isValid: boolean;
+}
+
+/**
+ * Validates a resolved layout candidate against all physical, safe area, and hardware constraints.
+ *
+ * @param layout - The computed layout candidate.
+ * @param surface - Target surface profile.
+ * @param spec - Optional source AdSpec for original element definitions.
+ * @returns Structured validation report with all detected violations.
+ */
+export function validateLayout(
+  layout: ResolvedLayout,
+  surface: SurfaceProfile,
+  spec?: AdSpec,
+): LayoutValidationResult {
+  const hardViolations: string[] = [];
+  const overlaps: [string, string][] = [];
+  const clipped: string[] = [];
+  const tapTargetViolations: string[] = [];
+  const textSizeViolations: string[] = [];
+
+  const visibleElements = layout.elements.filter((el: ResolvedElement) => el.visible);
+  const safeArea = surface.safeArea ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const epsilon = 0.5;
+
+  const minX = safeArea.left - epsilon;
+  const minY = safeArea.top - epsilon;
+  const maxX = surface.width - safeArea.right + epsilon;
+  const maxY = surface.height - safeArea.bottom + epsilon;
+
+  // 1. Boundary & Safe Area Containment Checks
+  for (const el of visibleElements) {
+    const isClippedLeft = el.x < minX;
+    const isClippedTop = el.y < minY;
+    const isClippedRight = el.x + el.width > maxX;
+    const isClippedBottom = el.y + el.height > maxY;
+
+    if (isClippedLeft || isClippedTop || isClippedRight || isClippedBottom) {
+      clipped.push(el.id);
+      hardViolations.push(
+        `Element "${el.id}" (${el.width}x${el.height} at [${el.x}, ${el.y}]) clips outside safe content bounds [${safeArea.left}, ${safeArea.top}, ${surface.width - safeArea.right}, ${surface.height - safeArea.bottom}].`,
+      );
+    }
+  }
+
+  // 2. Pairwise Zero-Overlap Checks
+  for (let i = 0; i < visibleElements.length; i++) {
+    const elA = visibleElements[i];
+    if (!elA) continue;
+
+    for (let j = i + 1; j < visibleElements.length; j++) {
+      const elB = visibleElements[j];
+      if (!elB) continue;
+
+      if (rectsOverlap(elA, elB)) {
+        overlaps.push([elA.id, elB.id]);
+        hardViolations.push(
+          `Collision detected: Element "${elA.id}" [${elA.x}, ${elA.y}, ${elA.width}, ${elA.height}] overlaps with "${elB.id}" [${elB.x}, ${elB.y}, ${elB.width}, ${elB.height}].`,
+        );
+      }
+    }
+  }
+
+  // 3. Minimum Tap Target Checks
+  const specElementMap = new Map<string, AdElement>();
+  if (spec) {
+    for (const elem of spec.elements) {
+      specElementMap.set(elem.id, elem);
+    }
+  }
+
+  for (const el of visibleElements) {
+    if (el.type === "button") {
+      const specElem = specElementMap.get(el.id);
+      const minRequiredTap = Math.max(
+        surface.minTapTarget ?? 0,
+        (specElem && "minTapTarget" in specElem ? specElem.minTapTarget : undefined) ?? 0,
+        surface.touchOnly ? 44 : 0,
+      );
+
+      if (minRequiredTap > 0 && (el.width < minRequiredTap - epsilon || el.height < minRequiredTap - epsilon)) {
+        tapTargetViolations.push(el.id);
+        hardViolations.push(
+          `Touch target violation: Button "${el.id}" dimensions (${el.width}x${el.height}px) are below minimum tap target (${minRequiredTap}px).`,
+        );
+      }
+    }
+  }
+
+  // 4. Minimum Text Size Checks
+  if (surface.minTextSize && surface.minTextSize > 0) {
+    for (const el of visibleElements) {
+      if ((el.type === "text" || el.type === "button") && typeof el.fontSize === "number") {
+        if (el.fontSize < surface.minTextSize - epsilon) {
+          textSizeViolations.push(el.id);
+          hardViolations.push(
+            `Legibility violation: Text element "${el.id}" font size (${el.fontSize}px) is below surface.minTextSize (${surface.minTextSize}px).`,
+          );
+        }
+      }
+    }
+  }
+
+  return {
+    hardViolations,
+    overlaps,
+    clipped,
+    tapTargetViolations,
+    textSizeViolations,
+    isValid: hardViolations.length === 0,
+  };
 }
 
 export { ValidationError };
