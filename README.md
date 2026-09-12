@@ -1,5 +1,11 @@
 # Adaptive Layout Engine for Multi-Surface Ads
 
+> **Live Interactive Studio**: [https://adaptive-layout-engine-for-multi-surface-ads.vercel.app/](https://adaptive-layout-engine-for-multi-surface-ads.vercel.app/)
+> 
+> [![Vercel Deployment](https://img.shields.io/badge/Deployment-Vercel_Live-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://adaptive-layout-engine-for-multi-surface-ads.vercel.app/)
+> [![Tests](https://img.shields.io/badge/Tests-108%20Passed-10b981?style=for-the-badge&logo=vitest&logoColor=white)](https://github.com/SAIKRISHNA2005/Adaptive-Layout-Engine-for-Multi-Surface-Ads)
+> [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%205.6-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://github.com/SAIKRISHNA2005/Adaptive-Layout-Engine-for-Multi-Surface-Ads)
+
 Adaptive Layout Engine is a framework-agnostic TypeScript constraint resolver that transforms a declarative advertising specification into a validated layout for arbitrary display surfaces. Rather than relying on rigid CSS media queries, viewport hacks, or fragile per-surface branching, the engine uses a deterministic, priority-ordered geometric pipeline. It maps semantic ad components—hero media, headline copy, value propositions, branding logos, and calls-to-action—across heterogeneous aspect ratios and physical contexts (ranging from mobile interstitials and horizontal mobile feeds to ultra-wide broadcast lower-thirds and square retail kiosks) while guaranteeing zero element overlap, zero boundary clipping, and strict compliance with hardware safe areas, touch accessibility standards, and distance-based text legibility.
 
 ---
@@ -100,7 +106,7 @@ Start the local Vite development server:
 ```bash
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser to inspect the studio interface.
+Open [http://localhost:5173](http://localhost:5173) in your browser to inspect the studio interface, or access the live deployed studio at [https://adaptive-layout-engine-for-multi-surface-ads.vercel.app/](https://adaptive-layout-engine-for-multi-surface-ads.vercel.app/).
 
 ### 3. Running Automated Tests
 Run the comprehensive test suite (17 test files, 108 tests including property-based testing):
