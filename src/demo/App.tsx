@@ -13,9 +13,12 @@ import { ConstraintInspector } from "./ConstraintInspector";
 import { ResolutionTrace } from "./ResolutionTrace";
 import { CustomSurfaceEditor } from "./CustomSurfaceEditor";
 import { domTextMeasurer } from "../measurement/dom-measurer";
+import "./demo.css";
 
 /**
  * Root Application component providing the live demo experience for multi-surface ad adaptation.
+ * Features a developer-tool layout with top navigation bar, surface picker tab strip,
+ * device frame canvas preview, real-time constraint inspector, and collapsible resolution trace.
  */
 export const App: React.FC = () => {
   const [customSurfaces, setCustomSurfaces] = useState<SurfaceProfile[]>([]);
@@ -43,7 +46,7 @@ export const App: React.FC = () => {
   }, [selectedSurface]);
 
   // Viewport scale factor so large surfaces fit comfortably on screen
-  const maxViewportWidth = 620;
+  const maxViewportWidth = 640;
   const maxViewportHeight = 440;
   const scale = useMemo(() => {
     const scaleX = Math.min(1, maxViewportWidth / selectedSurface.width);
@@ -51,312 +54,186 @@ export const App: React.FC = () => {
     return Math.min(scaleX, scaleY);
   }, [selectedSurface.width, selectedSurface.height]);
 
+  const isPortrait = selectedSurface.height > selectedSurface.width;
+  const scaledWidth = Math.round(selectedSurface.width * scale);
+  const scaledHeight = Math.round(selectedSurface.height * scale);
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#060911",
-        color: "#f8fafc",
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "24px 24px 48px",
-        boxSizing: "border-box",
-      }}
-    >
-      {/* Top Header */}
-      <header
-        style={{
-          width: "100%",
-          maxWidth: "1400px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "14px",
-          marginBottom: "20px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+    <div className="app-container">
+      {/* 1. Top App Navigation & Benchmark Bar */}
+      <header className="app-topbar">
+        <div className="brand-section">
+          <div className="brand-badge">⚡</div>
           <div>
-            <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}>
+            <h1 className="brand-title">
               Adaptive Layout Engine
+              <span className="engine-pill">R&D Demo</span>
             </h1>
-            <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#94a3b8" }}>
-              Constraint-based ad layout engine resolving single specs deterministically across multi-surface topologies
+            <p className="brand-subtitle">
+              Constraint-based deterministic layout resolution across multi-surface topologies
             </p>
           </div>
-
-          {/* Prominent Resolution Performance & Metric Bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 16px",
-                backgroundColor: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                borderRadius: "24px",
-                fontSize: "13px",
-                color: "#34d399",
-                fontWeight: 700,
-                boxShadow: "0 2px 10px rgba(16, 185, 129, 0.15)",
-              }}
-            >
-              <span style={{ fontSize: "14px" }}>⚡</span>
-              <span>Resolution: {diagnostics.summary.durationMs.toFixed(2)}ms</span>
-            </div>
-
-            {selectedSurface.id === "stressTest" && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 14px",
-                  backgroundColor: "rgba(239, 68, 68, 0.15)",
-                  border: "1px solid rgba(239, 68, 68, 0.4)",
-                  borderRadius: "24px",
-                  fontSize: "12px",
-                  color: "#f87171",
-                  fontWeight: 700,
-                  boxShadow: "0 2px 10px rgba(239, 68, 68, 0.2)",
-                }}
-              >
-                <span>🔥</span>
-                <span>Spatial Starvation Active</span>
-              </div>
-            )}
-
-            <div
-              style={{
-                padding: "8px 14px",
-                backgroundColor: "rgba(59, 130, 246, 0.12)",
-                border: "1px solid rgba(59, 130, 246, 0.3)",
-                borderRadius: "24px",
-                fontSize: "12px",
-                color: "#60a5fa",
-                fontWeight: 600,
-              }}
-            >
-              Archetype: {layout.metrics.archetype ?? "Standard"}
-            </div>
-          </div>
         </div>
 
-        {/* Surface Selection Tabs */}
-        <SurfacePicker
-          selectedSurfaceId={selectedSurface.id}
-          surfaces={allSurfaces}
-          isCustomEditorOpen={isCustomEditorOpen}
-          onSelectSurface={(surface) => {
-            setSelectedSurface(surface);
-            setIsCustomEditorOpen(false);
-          }}
-          onSelectCustom={() => setIsCustomEditorOpen((prev) => !prev)}
-        />
-
-        {/* Custom Surface Editor Drawer / Modal */}
-        {isCustomEditorOpen && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginTop: "8px",
-            }}
-          >
-            <CustomSurfaceEditor
-              onSave={handleSaveCustomSurface}
-              onCancel={() => setIsCustomEditorOpen(false)}
-            />
+        {/* Telemetry Strip & Renderer Controls */}
+        <div className="telemetry-strip">
+          <div className="telemetry-pill latency">
+            <span>⚡</span>
+            <span>Resolution: {diagnostics.summary.durationMs.toFixed(2)}ms</span>
           </div>
-        )}
+
+          {selectedSurface.id === "stressTest" && (
+            <div className="telemetry-pill starvation">
+              <span>🔥</span>
+              <span>Spatial Starvation Active</span>
+            </div>
+          )}
+
+          <div className="telemetry-pill archetype">
+            <span>Archetype: {layout.metrics.archetype ?? "Standard"}</span>
+          </div>
+
+          {/* DOM vs Canvas Renderer Toggle (proves renderer independence) */}
+          <div className="renderer-toggle">
+            <button
+              type="button"
+              data-testid="toggle-dom-renderer"
+              role="button"
+              aria-pressed={rendererMode === "dom"}
+              onClick={() => setRendererMode("dom")}
+              className={`toggle-btn ${rendererMode === "dom" ? "active" : ""}`}
+            >
+              HTML / DOM
+            </button>
+            <button
+              type="button"
+              data-testid="toggle-canvas-renderer"
+              role="button"
+              aria-pressed={rendererMode === "canvas"}
+              onClick={() => setRendererMode("canvas")}
+              className={`toggle-btn ${rendererMode === "canvas" ? "active" : ""}`}
+            >
+              HTML5 Canvas
+            </button>
+          </div>
+        </div>
       </header>
 
-      {/* Main Content: 2-Column Responsive Workspace */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "1400px",
-          display: "grid",
-          gridTemplateColumns: "1.1fr 0.9fr",
-          gap: "24px",
-          alignItems: "start",
-        }}
-      >
-        {/* Left Column: Rendered Ad Preview */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 4px",
-              flexWrap: "wrap",
-              gap: "8px",
+      {/* 2. Main 3-Column Workspace */}
+      <main className="workspace-grid">
+        {/* Left Column: Surface Picker Tab Strip */}
+        <aside className="sidebar-surfaces">
+          <div className="section-header">
+            <h2 className="section-title">Target Surfaces</h2>
+            <span className="count-badge">{allSurfaces.length} Surfaces</span>
+          </div>
+          <SurfacePicker
+            selectedSurfaceId={selectedSurface.id}
+            surfaces={allSurfaces}
+            isCustomEditorOpen={isCustomEditorOpen}
+            onSelectSurface={(surface) => {
+              setSelectedSurface(surface);
+              setIsCustomEditorOpen(false);
             }}
-          >
-            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#cbd5e1" }}>
-              Live Surface Preview ({selectedSurface.name})
-            </h2>
+            onSelectCustom={() => setIsCustomEditorOpen((prev) => !prev)}
+            orientation="vertical"
+          />
+        </aside>
 
-            {/* DOM vs Canvas Renderer Toggle (proves renderer independence) */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                backgroundColor: "rgba(15, 23, 42, 0.9)",
-                padding: "3px 4px",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-              }}
-            >
-              <button
-                type="button"
-                data-testid="toggle-dom-renderer"
-                role="button"
-                aria-pressed={rendererMode === "dom"}
-                onClick={() => setRendererMode("dom")}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "none",
-                  cursor: "pointer",
-                  backgroundColor: rendererMode === "dom" ? "#3b82f6" : "transparent",
-                  color: rendererMode === "dom" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                HTML / DOM
-              </button>
-              <button
-                type="button"
-                data-testid="toggle-canvas-renderer"
-                role="button"
-                aria-pressed={rendererMode === "canvas"}
-                onClick={() => setRendererMode("canvas")}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: "none",
-                  cursor: "pointer",
-                  backgroundColor: rendererMode === "canvas" ? "#3b82f6" : "transparent",
-                  color: rendererMode === "canvas" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                HTML5 Canvas
-              </button>
+        {/* Center Column: Device Frame Preview Workspace */}
+        <section className="workspace-center">
+          {/* Preview Toolbar */}
+          <div className="preview-toolbar">
+            <div className="device-title-info">
+              <span>{isPortrait ? "📱" : "🖥️"}</span>
+              <span>{selectedSurface.name}</span>
+              <span className="device-badge-spec">
+                {selectedSurface.width}×{selectedSurface.height}px
+              </span>
             </div>
-
-            <span style={{ fontSize: "12px", color: "#64748b" }}>
-              Scale: {(scale * 100).toFixed(0)}% • Native: {selectedSurface.width}×{selectedSurface.height}px
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+                Fit Scale: {(scale * 100).toFixed(0)}%
+              </span>
+            </div>
           </div>
 
-          <main
-            style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#0b101d",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              borderRadius: "16px",
-              padding: "32px 16px",
-              minHeight: "520px",
-              boxSizing: "border-box",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
+          {/* Canvas / Device Stage */}
+          <div className="device-stage">
+            {/* Realistic Device / Frame Outline */}
             <div
+              className={`device-frame ${isPortrait ? "portrait" : "landscape"}`}
               style={{
-                width: `${Math.round(selectedSurface.width * scale)}px`,
-                height: `${Math.round(selectedSurface.height * scale)}px`,
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                width: `${scaledWidth + 16}px`,
+                height: `${scaledHeight + 16}px`,
+                padding: "8px",
+                boxSizing: "border-box",
               }}
             >
               <div
                 style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: "50%",
-                  transform: `translate(-50%, -50%) scale(${scale})`,
-                  transformOrigin: "center center",
-                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                  borderRadius: "8px",
+                  width: `${scaledWidth}px`,
+                  height: `${scaledHeight}px`,
+                  position: "relative",
                   overflow: "hidden",
-                  transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                  borderRadius: "14px",
                 }}
               >
-                {rendererMode === "dom" ? (
-                  <RenderedAd
-                    layout={layout}
-                    surface={selectedSurface}
-                    spec={defaultDemoAdSpec}
-                    hoveredElementId={hoveredElementId}
-                    onHoverElement={setHoveredElementId}
-                  />
-                ) : (
-                  <CanvasAd
-                    layout={layout}
-                    surface={selectedSurface}
-                    spec={defaultDemoAdSpec}
-                  />
-                )}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    transform: `translate(-50%, -50%) scale(${scale})`,
+                    transformOrigin: "center center",
+                    width: `${selectedSurface.width}px`,
+                    height: `${selectedSurface.height}px`,
+                  }}
+                >
+                  {rendererMode === "dom" ? (
+                    <RenderedAd
+                      layout={layout}
+                      surface={selectedSurface}
+                      spec={defaultDemoAdSpec}
+                      hoveredElementId={hoveredElementId}
+                      onHoverElement={setHoveredElementId}
+                    />
+                  ) : (
+                    <CanvasAd
+                      layout={layout}
+                      surface={selectedSurface}
+                      spec={defaultDemoAdSpec}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Quick Stats Strip */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: "12px",
-                display: "flex",
-                gap: "16px",
-                fontSize: "12px",
-                color: "#64748b",
-              }}
-            >
+            {/* Quick Metrics Badge Bar */}
+            <div className="stage-metrics-bar">
               <span>
-                Resolved: <strong style={{ color: "#cbd5e1" }}>{diagnostics.summary.elementsResolved}/{diagnostics.summary.elementsTotal}</strong>
+                Resolved: <strong style={{ color: "#f1f5f9" }}>{diagnostics.summary.elementsResolved}/{diagnostics.summary.elementsTotal}</strong>
               </span>
+              <span>•</span>
               <span>
-                Collisions: <strong style={{ color: diagnostics.summary.overlaps === 0 ? "#10b981" : "#ef4444" }}>{diagnostics.summary.overlaps}</strong>
+                Collisions:{" "}
+                <strong style={{ color: diagnostics.summary.overlaps === 0 ? "var(--success)" : "var(--danger)" }}>
+                  {diagnostics.summary.overlaps}
+                </strong>
               </span>
+              <span>•</span>
               <span>
-                Clipping: <strong style={{ color: diagnostics.summary.clipping === 0 ? "#10b981" : "#ef4444" }}>{diagnostics.summary.clipping}</strong>
+                Clipping:{" "}
+                <strong style={{ color: diagnostics.summary.clipping === 0 ? "var(--success)" : "var(--danger)" }}>
+                  {diagnostics.summary.clipping}
+                </strong>
               </span>
             </div>
-          </main>
-        </div>
+          </div>
+        </section>
 
-        {/* Right Column: R&D Tooling (Constraint Inspector & Resolution Trace) */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "20px",
-          }}
-        >
-          {/* Constraint Inspector Panel */}
+        {/* Right Column: Constraint Inspector */}
+        <aside className="sidebar-inspector">
           <ConstraintInspector
             surface={selectedSurface}
             layout={layout}
@@ -365,15 +242,29 @@ export const App: React.FC = () => {
             hoveredElementId={hoveredElementId}
             onHoverElement={setHoveredElementId}
           />
+        </aside>
+      </main>
 
-          {/* Step-by-Step Resolution Trace Panel */}
-          <ResolutionTrace
-            diagnostics={diagnostics}
-            hoveredElementId={hoveredElementId}
-            onHoverElement={setHoveredElementId}
-          />
+      {/* 3. Bottom Dock: Collapsible Resolution Trace Panel */}
+      <footer className="trace-dock-container">
+        <ResolutionTrace
+          diagnostics={diagnostics}
+          hoveredElementId={hoveredElementId}
+          onHoverElement={setHoveredElementId}
+        />
+      </footer>
+
+      {/* Custom Surface Creation Modal */}
+      {isCustomEditorOpen && (
+        <div className="modal-backdrop" onClick={() => setIsCustomEditorOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <CustomSurfaceEditor
+              onSave={handleSaveCustomSurface}
+              onCancel={() => setIsCustomEditorOpen(false)}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

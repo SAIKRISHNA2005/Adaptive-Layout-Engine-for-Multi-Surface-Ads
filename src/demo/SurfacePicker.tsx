@@ -31,6 +31,8 @@ export interface SurfacePickerProps {
   readonly surfaces?: readonly SurfaceProfile[];
   /** Whether the custom surface editor modal/drawer is open. */
   readonly isCustomEditorOpen?: boolean;
+  /** Layout orientation: vertical (for sidebar) or horizontal. Default is vertical. */
+  readonly orientation?: "vertical" | "horizontal";
 }
 
 /**
@@ -43,25 +45,26 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
   onSelectCustom,
   surfaces = DEMO_SURFACES,
   isCustomEditorOpen = false,
+  orientation = "vertical",
 }) => {
+  const isVertical = orientation === "vertical";
+
   return (
     <div
       role="tablist"
       aria-label="Surface Profiles"
       style={{
         display: "flex",
-        flexWrap: "wrap",
-        gap: "10px",
-        padding: "12px 16px",
-        backgroundColor: "#131b2e",
-        borderRadius: "12px",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+        flexDirection: isVertical ? "column" : "row",
+        flexWrap: isVertical ? "nowrap" : "wrap",
+        gap: "8px",
+        width: "100%",
       }}
     >
       {surfaces.map((surface) => {
         const isSelected = surface.id === selectedSurfaceId;
         const aspectRatio = (surface.width / surface.height).toFixed(2);
+        const isStress = surface.id === "stressTest";
 
         return (
           <button
@@ -74,27 +77,63 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
               flexDirection: "column",
               alignItems: "flex-start",
               gap: "4px",
-              padding: "10px 16px",
-              backgroundColor: isSelected ? "#2563eb" : "rgba(255, 255, 255, 0.04)",
-              color: isSelected ? "#ffffff" : "#cbd5e1",
+              padding: "10px 14px",
+              backgroundColor: isSelected
+                ? "rgba(59, 130, 246, 0.16)"
+                : "rgba(255, 255, 255, 0.02)",
+              color: isSelected ? "#ffffff" : "#94a3b8",
               border: isSelected
                 ? "1px solid #3b82f6"
                 : "1px solid rgba(255, 255, 255, 0.06)",
               borderRadius: "8px",
               cursor: "pointer",
               transition: "all 0.15s ease",
-              boxShadow: isSelected ? "0 2px 10px rgba(37, 99, 235, 0.4)" : "none",
+              boxShadow: isSelected ? "0 2px 12px rgba(59, 130, 246, 0.25)" : "none",
+              position: "relative",
+              textAlign: "left",
+              width: "100%",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: "14px" }}>{surface.name}</span>
+            {isSelected && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "3px",
+                  backgroundColor: isStress ? "#ef4444" : "#3b82f6",
+                  borderRadius: "8px 0 0 8px",
+                }}
+              />
+            )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <span style={{ fontWeight: 600, fontSize: "13px", color: isSelected ? "#ffffff" : "#cbd5e1" }}>
+                {surface.name}
+              </span>
+              {isStress && (
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    color: "#f87171",
+                    backgroundColor: "rgba(239, 68, 68, 0.15)",
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  STRESS
+                </span>
+              )}
+            </div>
             <span
               style={{
-                fontSize: "12px",
-                opacity: isSelected ? 0.9 : 0.6,
-                fontFamily: "monospace",
+                fontSize: "11px",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                color: isSelected ? "#93c5fd" : "#64748b",
               }}
             >
-              {surface.width}×{surface.height}px (AR: {aspectRatio})
+              {surface.width}×{surface.height}px • AR {aspectRatio}
             </span>
           </button>
         );
@@ -110,11 +149,11 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           flexDirection: "column",
           alignItems: "flex-start",
           gap: "4px",
-          padding: "10px 16px",
+          padding: "10px 14px",
           backgroundColor:
             isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
-              ? "#9333ea"
-              : "rgba(147, 51, 234, 0.08)",
+              ? "rgba(147, 51, 234, 0.16)"
+              : "rgba(255, 255, 255, 0.02)",
           color:
             isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
               ? "#ffffff"
@@ -122,14 +161,16 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           border:
             isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
               ? "1px solid #a855f7"
-              : "1px dashed rgba(168, 85, 247, 0.4)",
+              : "1px dashed rgba(168, 85, 247, 0.35)",
           borderRadius: "8px",
           cursor: "pointer",
           transition: "all 0.15s ease",
+          width: "100%",
+          textAlign: "left",
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: "14px" }}>✨ + Custom Surface</span>
-        <span style={{ fontSize: "12px", opacity: 0.8 }}>Unseen 5th Profile</span>
+        <span style={{ fontWeight: 600, fontSize: "13px" }}>✨ + Custom Surface</span>
+        <span style={{ fontSize: "11px", opacity: 0.8 }}>Unseen 5th Profile</span>
       </button>
     </div>
   );

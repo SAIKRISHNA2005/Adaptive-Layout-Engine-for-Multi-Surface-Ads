@@ -30,27 +30,27 @@ export interface RenderedAdProps {
   readonly style?: CSSProperties;
 }
 
-/** Status-specific debug outline styling mapping. */
+/** Status-specific debug outline styling mapping (subtle developer-tool treatment). */
 const STATUS_OUTLINE_STYLES: Record<ElementStatus, { border: string; badge: string; bg: string }> = {
   kept: {
-    border: "1px solid rgba(59, 130, 246, 0.4)",
+    border: "1px solid rgba(255, 255, 255, 0.04)",
     badge: "#3b82f6",
-    bg: "rgba(59, 130, 246, 0.04)",
+    bg: "transparent",
   },
   shrunk: {
-    border: "1px dashed rgba(245, 158, 11, 0.8)",
+    border: "1px dashed rgba(245, 158, 11, 0.3)",
     badge: "#f59e0b",
-    bg: "rgba(245, 158, 11, 0.08)",
+    bg: "rgba(245, 158, 11, 0.02)",
   },
   repositioned: {
-    border: "1px dashed rgba(6, 182, 212, 0.8)",
+    border: "1px dashed rgba(6, 182, 212, 0.3)",
     badge: "#06b6d4",
-    bg: "rgba(6, 182, 212, 0.08)",
+    bg: "rgba(6, 182, 212, 0.02)",
   },
   truncated: {
-    border: "1px dashed rgba(168, 85, 247, 0.8)",
+    border: "1px dashed rgba(168, 85, 247, 0.3)",
     badge: "#a855f7",
-    bg: "rgba(168, 85, 247, 0.08)",
+    bg: "rgba(168, 85, 247, 0.02)",
   },
   dropped: {
     border: "none",
@@ -319,18 +319,20 @@ export const RenderedAd: FC<RenderedAdProps> = ({
               <span
                 style={{
                   position: "absolute",
-                  top: "-8px",
-                  right: "-4px",
+                  top: "-7px",
+                  right: "-3px",
                   backgroundColor: debugStyle?.badge,
                   color: "#ffffff",
-                  fontSize: "9px",
+                  fontSize: "8px",
                   fontWeight: 700,
-                  padding: "1px 5px",
-                  borderRadius: "4px",
+                  padding: "1px 4px",
+                  borderRadius: "3px",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
                   pointerEvents: "none",
+                  opacity: isHovered ? 1 : 0.6,
+                  transition: "opacity 0.15s ease",
                 }}
               >
                 {resolved.status}
