@@ -154,8 +154,17 @@ function measureState(
       let baseHeight: number;
 
       if (elem.preferredWidth && elem.preferredHeight) {
-        baseWidth = elem.preferredWidth;
-        baseHeight = elem.preferredHeight;
+        let baseW = Math.min(availableWidth, elem.preferredWidth);
+        let baseH = Math.min(availableHeight, elem.preferredHeight);
+        if (aspectRatio) {
+          if (elem.preferredWidth > availableWidth) {
+            baseH = Math.min(availableHeight, Math.round(baseW / aspectRatio));
+          } else if (elem.preferredHeight > availableHeight) {
+            baseW = Math.min(availableWidth, Math.round(baseH * aspectRatio));
+          }
+        }
+        baseWidth = baseW;
+        baseHeight = baseH;
       } else if (elem.role === "hero") {
         baseWidth = Math.min(availableWidth, Math.round(availableHeight * 0.45 * aspectRatio));
         baseHeight = Math.round(baseWidth / aspectRatio);
@@ -498,9 +507,7 @@ function buildCandidateLayout(
 
     if (numItems > 1) {
       const leftoverSpace = availableHeight - totalMeasuredHeight;
-      if (leftoverSpace < (numItems - 1) * gap) {
-        gap = Math.max(4, Math.floor(leftoverSpace / (numItems - 1)));
-      }
+      gap = Math.max(0, Math.min(12, Math.floor(leftoverSpace / (numItems - 1))));
     }
 
     let currentY = contentY;
@@ -631,7 +638,7 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
     }
   }
 
-  // 2. Text element ladder: shrink font -> wrap -> truncate
+  // 2. Text element ladder: shrink font -> wrap -> truncate -> drop (if droppable)
   if (state.type === "text") {
     if (state.original.canShrink !== false && state.fontSize && state.fontSize > state.minFontSize) {
       const stepDown = Math.max(state.minFontSize, state.fontSize - 4);
@@ -643,8 +650,8 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
       return decision;
     }
 
-    if (!state.isTruncated && state.original.canTruncate !== false && state.displayText.length > 12) {
-      const truncateLength = Math.max(8, Math.floor(state.displayText.length * 0.6));
+    if (state.original.canTruncate !== false && state.displayText.length > 20) {
+      const truncateLength = Math.max(16, Math.floor(state.displayText.length * 0.5));
       state.displayText = state.displayText.slice(0, truncateLength).trim() + "...";
       state.isTruncated = true;
       state.status = "truncated";
@@ -652,14 +659,30 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
       state.decisions.push(decision);
       return decision;
     }
+
+    if (isDroppable && state.visible) {
+      state.visible = false;
+      state.status = "dropped";
+      const decision = `Dropped text element: priority ${state.priority}, role=${state.role}, insufficient space remaining.`;
+      state.decisions.push(decision);
+      return decision;
+    }
   }
 
-  // 3. Image element ladder: scale down -> crop
+  // 3. Image element ladder: scale down -> crop -> drop (if droppable)
   if (state.type === "image") {
-    if (state.original.canShrink !== false && state.scale > 0.5) {
-      state.scale = Math.max(0.4, state.scale - 0.25);
+    if (state.original.canShrink !== false && state.scale > 0.25) {
+      state.scale = Math.max(0.2, Math.round((state.scale - 0.2) * 100) / 100);
       state.status = "shrunk";
       const decision = `Scaled image dimensions to ${Math.round(state.scale * 100)}% to fit available space.`;
+      state.decisions.push(decision);
+      return decision;
+    }
+
+    if (isDroppable && state.visible) {
+      state.visible = false;
+      state.status = "dropped";
+      const decision = `Dropped image element: priority ${state.priority}, role=${state.role}, insufficient space remaining.`;
       state.decisions.push(decision);
       return decision;
     }
