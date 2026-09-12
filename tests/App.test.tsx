@@ -73,4 +73,28 @@ describe("App Shell (Phase 7 & 8 - Multi-Surface Live Switching & Tooling)", () 
     expect(screen.getByText(/Spatial Starvation Active/i)).toBeInTheDocument();
     expect(screen.getByTestId("space-pressure-indicator")).toBeInTheDocument();
   });
+
+  it("toggles between HTML/DOM and HTML5 Canvas renderers proving renderer independence", () => {
+    render(<App />);
+
+    // Default renderer is HTML/DOM
+    expect(screen.getByTestId("rendered-ad-container")).toBeInTheDocument();
+    expect(screen.queryByTestId("canvas-ad-element")).not.toBeInTheDocument();
+
+    // Switch to Canvas renderer
+    const canvasToggleBtn = screen.getByTestId("toggle-canvas-renderer");
+    fireEvent.click(canvasToggleBtn);
+
+    // Canvas element should now be rendered instead of DOM container
+    expect(screen.getByTestId("canvas-ad-element")).toBeInTheDocument();
+    expect(screen.queryByTestId("rendered-ad-container")).not.toBeInTheDocument();
+
+    // Switch back to DOM renderer
+    const domToggleBtn = screen.getByTestId("toggle-dom-renderer");
+    fireEvent.click(domToggleBtn);
+
+    expect(screen.getByTestId("rendered-ad-container")).toBeInTheDocument();
+    expect(screen.queryByTestId("canvas-ad-element")).not.toBeInTheDocument();
+  });
 });
+

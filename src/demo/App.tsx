@@ -6,6 +6,7 @@ import { mobilePortrait } from "../core/surfaces";
 import { type SurfaceProfile } from "../core/types";
 import { resolveWithDiagnostics } from "../core/resolver";
 import { RenderedAd } from "../renderers/render-dom";
+import { CanvasAd } from "../renderers/CanvasAd";
 import { defaultDemoAdSpec } from "./adSpec";
 import { SurfacePicker, DEMO_SURFACES } from "./SurfacePicker";
 import { ConstraintInspector } from "./ConstraintInspector";
@@ -21,6 +22,7 @@ export const App: React.FC = () => {
   const [selectedSurface, setSelectedSurface] = useState<SurfaceProfile>(mobilePortrait);
   const [isCustomEditorOpen, setIsCustomEditorOpen] = useState<boolean>(false);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+  const [rendererMode, setRendererMode] = useState<"dom" | "canvas">("dom");
 
   // Combine static presets and user-created custom surfaces dynamically
   const allSurfaces = useMemo(() => {
@@ -197,11 +199,68 @@ export const App: React.FC = () => {
               alignItems: "center",
               justifyContent: "space-between",
               padding: "0 4px",
+              flexWrap: "wrap",
+              gap: "8px",
             }}
           >
             <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#cbd5e1" }}>
               Live Surface Preview ({selectedSurface.name})
             </h2>
+
+            {/* DOM vs Canvas Renderer Toggle (proves renderer independence) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                backgroundColor: "rgba(15, 23, 42, 0.9)",
+                padding: "3px 4px",
+                borderRadius: "8px",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+              }}
+            >
+              <button
+                type="button"
+                data-testid="toggle-dom-renderer"
+                role="button"
+                aria-pressed={rendererMode === "dom"}
+                onClick={() => setRendererMode("dom")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: rendererMode === "dom" ? "#3b82f6" : "transparent",
+                  color: rendererMode === "dom" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                HTML / DOM
+              </button>
+              <button
+                type="button"
+                data-testid="toggle-canvas-renderer"
+                role="button"
+                aria-pressed={rendererMode === "canvas"}
+                onClick={() => setRendererMode("canvas")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: rendererMode === "canvas" ? "#3b82f6" : "transparent",
+                  color: rendererMode === "canvas" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                HTML5 Canvas
+              </button>
+            </div>
+
             <span style={{ fontSize: "12px", color: "#64748b" }}>
               Scale: {(scale * 100).toFixed(0)}% • Native: {selectedSurface.width}×{selectedSurface.height}px
             </span>
@@ -247,13 +306,21 @@ export const App: React.FC = () => {
                   transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
               >
-                <RenderedAd
-                  layout={layout}
-                  surface={selectedSurface}
-                  spec={defaultDemoAdSpec}
-                  hoveredElementId={hoveredElementId}
-                  onHoverElement={setHoveredElementId}
-                />
+                {rendererMode === "dom" ? (
+                  <RenderedAd
+                    layout={layout}
+                    surface={selectedSurface}
+                    spec={defaultDemoAdSpec}
+                    hoveredElementId={hoveredElementId}
+                    onHoverElement={setHoveredElementId}
+                  />
+                ) : (
+                  <CanvasAd
+                    layout={layout}
+                    surface={selectedSurface}
+                    spec={defaultDemoAdSpec}
+                  />
+                )}
               </div>
             </div>
 
