@@ -11,6 +11,7 @@ import { SurfacePicker, DEMO_SURFACES } from "./SurfacePicker";
 import { ConstraintInspector } from "./ConstraintInspector";
 import { ResolutionTrace } from "./ResolutionTrace";
 import { CustomSurfaceEditor } from "./CustomSurfaceEditor";
+import { domTextMeasurer } from "../measurement/dom-measurer";
 
 /**
  * Root Application component providing the live demo experience for multi-surface ad adaptation.
@@ -32,9 +33,11 @@ export const App: React.FC = () => {
     setIsCustomEditorOpen(false);
   };
 
-  // Re-resolve layout whenever selected surface changes
+  // Re-resolve layout whenever selected surface changes using real DOM text measurement
   const { layout, diagnostics } = useMemo(() => {
-    return resolveWithDiagnostics(defaultDemoAdSpec, selectedSurface);
+    return resolveWithDiagnostics(defaultDemoAdSpec, selectedSurface, {
+      textMeasurer: domTextMeasurer,
+    });
   }, [selectedSurface]);
 
   // Viewport scale factor so large surfaces fit comfortably on screen
