@@ -12,3 +12,4 @@ export * from "./demo/adSpec";
 export * from "./demo/SurfacePicker";
 export * from "./demo/ConstraintInspector";
 export * from "./demo/ResolutionTrace";
+export * from "./demo/CustomSurfaceEditor";

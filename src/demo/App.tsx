@@ -7,16 +7,30 @@ import { type SurfaceProfile } from "../core/types";
 import { resolveWithDiagnostics } from "../core/resolver";
 import { RenderedAd } from "../renderers/render-dom";
 import { defaultDemoAdSpec } from "./adSpec";
-import { SurfacePicker } from "./SurfacePicker";
+import { SurfacePicker, DEMO_SURFACES } from "./SurfacePicker";
 import { ConstraintInspector } from "./ConstraintInspector";
 import { ResolutionTrace } from "./ResolutionTrace";
+import { CustomSurfaceEditor } from "./CustomSurfaceEditor";
 
 /**
  * Root Application component providing the live demo experience for multi-surface ad adaptation.
  */
 export const App: React.FC = () => {
+  const [customSurfaces, setCustomSurfaces] = useState<SurfaceProfile[]>([]);
   const [selectedSurface, setSelectedSurface] = useState<SurfaceProfile>(mobilePortrait);
+  const [isCustomEditorOpen, setIsCustomEditorOpen] = useState<boolean>(false);
   const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+
+  // Combine static presets and user-created custom surfaces dynamically
+  const allSurfaces = useMemo(() => {
+    return [...DEMO_SURFACES, ...customSurfaces];
+  }, [customSurfaces]);
+
+  const handleSaveCustomSurface = (newSurface: SurfaceProfile) => {
+    setCustomSurfaces((prev) => [...prev.filter((s) => s.id !== newSurface.id), newSurface]);
+    setSelectedSurface(newSurface);
+    setIsCustomEditorOpen(false);
+  };
 
   // Re-resolve layout whenever selected surface changes
   const { layout, diagnostics } = useMemo(() => {
@@ -129,9 +143,30 @@ export const App: React.FC = () => {
         {/* Surface Selection Tabs */}
         <SurfacePicker
           selectedSurfaceId={selectedSurface.id}
-          onSelectSurface={(surface) => setSelectedSurface(surface)}
-          onSelectCustom={() => alert("Custom Surface Editor is being activated in Phase 9!")}
+          surfaces={allSurfaces}
+          isCustomEditorOpen={isCustomEditorOpen}
+          onSelectSurface={(surface) => {
+            setSelectedSurface(surface);
+            setIsCustomEditorOpen(false);
+          }}
+          onSelectCustom={() => setIsCustomEditorOpen((prev) => !prev)}
         />
+
+        {/* Custom Surface Editor Drawer / Modal */}
+        {isCustomEditorOpen && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "8px",
+            }}
+          >
+            <CustomSurfaceEditor
+              onSave={handleSaveCustomSurface}
+              onCancel={() => setIsCustomEditorOpen(false)}
+            />
+          </div>
+        )}
       </header>
 
       {/* Main Content: 2-Column Responsive Workspace */}

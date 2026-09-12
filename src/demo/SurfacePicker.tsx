@@ -25,8 +25,12 @@ export interface SurfacePickerProps {
   readonly selectedSurfaceId: string;
   /** Callback fired when a surface tab is selected. */
   readonly onSelectSurface: (surface: SurfaceProfile) => void;
-  /** Callback fired when the 5th Custom Surface tab is selected. */
+  /** Callback fired when the Custom Surface tab is selected. */
   readonly onSelectCustom?: () => void;
+  /** Optional custom surface list to display, defaults to DEMO_SURFACES. */
+  readonly surfaces?: readonly SurfaceProfile[];
+  /** Whether the custom surface editor modal/drawer is open. */
+  readonly isCustomEditorOpen?: boolean;
 }
 
 /**
@@ -37,6 +41,8 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
   selectedSurfaceId,
   onSelectSurface,
   onSelectCustom,
+  surfaces = DEMO_SURFACES,
+  isCustomEditorOpen = false,
 }) => {
   return (
     <div
@@ -53,7 +59,7 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
         boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
       }}
     >
-      {DEMO_SURFACES.map((surface) => {
+      {surfaces.map((surface) => {
         const isSelected = surface.id === selectedSurfaceId;
         const aspectRatio = (surface.width / surface.height).toFixed(2);
 
@@ -94,10 +100,10 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
         );
       })}
 
-      {/* Visually Distinct 5th "Custom Surface" Tab (Placeholder for Phase 8) */}
+      {/* Visually Distinct Custom Surface Creation Tab */}
       <button
         role="tab"
-        aria-selected={selectedSurfaceId === "custom"}
+        aria-selected={isCustomEditorOpen || selectedSurfaceId.startsWith("custom")}
         onClick={onSelectCustom}
         style={{
           display: "flex",
@@ -106,10 +112,15 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           gap: "4px",
           padding: "10px 16px",
           backgroundColor:
-            selectedSurfaceId === "custom" ? "#9333ea" : "rgba(147, 51, 234, 0.08)",
-          color: selectedSurfaceId === "custom" ? "#ffffff" : "#c084fc",
+            isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
+              ? "#9333ea"
+              : "rgba(147, 51, 234, 0.08)",
+          color:
+            isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
+              ? "#ffffff"
+              : "#c084fc",
           border:
-            selectedSurfaceId === "custom"
+            isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
               ? "1px solid #a855f7"
               : "1px dashed rgba(168, 85, 247, 0.4)",
           borderRadius: "8px",
@@ -117,7 +128,7 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           transition: "all 0.15s ease",
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: "14px" }}>✨ Custom Surface</span>
+        <span style={{ fontWeight: 600, fontSize: "14px" }}>✨ + Custom Surface</span>
         <span style={{ fontSize: "12px", opacity: 0.8 }}>Unseen 5th Profile</span>
       </button>
     </div>
