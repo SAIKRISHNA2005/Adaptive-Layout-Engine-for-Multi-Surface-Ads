@@ -1,6 +1,6 @@
 // React DOM renderer that transforms resolved layout coordinates and element specs into interactive HTML/CSS components.
 
-import { useMemo, type CSSProperties, type FC } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FC } from "react";
 import {
   type AdElement,
   type AdSpec,
@@ -59,9 +59,15 @@ const STATUS_OUTLINE_STYLES: Record<ElementStatus, { border: string; badge: stri
   },
 };
 
+interface DisplayElementEntry {
+  readonly resolved: ResolvedElement;
+  readonly isExiting: boolean;
+}
+
 /**
  * Pure React DOM renderer that projects a ResolvedLayout onto absolute HTML/CSS elements.
  * Contains ZERO layout decision logic or media queries; consumes coordinates directly from layout IR.
+ * Features lightweight 250ms CSS-driven spatial transitions and fade-in/fade-out animations on surface switch.
  */
 export const RenderedAd: FC<RenderedAdProps> = ({
   layout,
@@ -82,10 +88,63 @@ export const RenderedAd: FC<RenderedAdProps> = ({
     return map;
   }, [spec]);
 
-  // Filter out dropped or invisible elements: they are NOT rendered in the DOM
-  const activeElements = useMemo(() => {
-    return layout.elements.filter((el: ResolvedElement) => el.visible && el.status !== "dropped");
-  }, [layout.elements]);
+  // Display elements state tracks active elements and briefly retains exiting elements for fade-out transitions
+  const [displayMap, setDisplayMap] = useState<Map<string, DisplayElementEntry>>(() => {
+    const map = new Map<string, DisplayElementEntry>();
+    for (const el of layout.elements) {
+      if (el.visible && el.status !== "dropped") {
+        map.set(el.id, { resolved: el, isExiting: false });
+      }
+    }
+    return map;
+  });
+
+  useEffect(() => {
+    const activeElements = layout.elements.filter((el) => el.visible && el.status !== "dropped");
+    const activeIds = new Set(activeElements.map((el) => el.id));
+
+    setDisplayMap((prev) => {
+      const next = new Map<string, DisplayElementEntry>();
+
+      // 1. Add all newly active or updating elements
+      for (const el of activeElements) {
+        next.set(el.id, { resolved: el, isExiting: false });
+      }
+
+      // 2. Retain previously visible elements that were dropped in this layout for a graceful 250ms fade-out
+      for (const [id, prevItem] of prev) {
+        if (!activeIds.has(id)) {
+          next.set(id, {
+            resolved: {
+              ...prevItem.resolved,
+              status: "dropped",
+              visible: false,
+            },
+            isExiting: true,
+          });
+        }
+      }
+
+      return next;
+    });
+
+    // Remove exited elements after transition finishes
+    const timer = setTimeout(() => {
+      setDisplayMap((current) => {
+        const cleaned = new Map<string, DisplayElementEntry>();
+        for (const [id, item] of current) {
+          if (!item.isExiting) {
+            cleaned.set(id, item);
+          }
+        }
+        return cleaned;
+      });
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [layout]);
+
+  const displayList = Array.from(displayMap.values());
 
   return (
     <div
@@ -106,10 +165,12 @@ export const RenderedAd: FC<RenderedAdProps> = ({
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         boxSizing: "border-box",
         userSelect: "none",
+        transition:
+          "width 250ms cubic-bezier(0.4, 0, 0.2, 1), height 250ms cubic-bezier(0.4, 0, 0.2, 1), max-width 250ms cubic-bezier(0.4, 0, 0.2, 1), max-height 250ms cubic-bezier(0.4, 0, 0.2, 1)",
         ...style,
       }}
     >
-      {activeElements.map((resolved: ResolvedElement) => {
+      {displayList.map(({ resolved, isExiting }) => {
         const specElem = specElementMap.get(resolved.id);
         const isHovered = hoveredElementId === resolved.id;
         const debugStyle = debugOutlines ? STATUS_OUTLINE_STYLES[resolved.status] : undefined;
@@ -120,17 +181,21 @@ export const RenderedAd: FC<RenderedAdProps> = ({
           top: `${resolved.y}px`,
           width: `${resolved.width}px`,
           height: `${resolved.height}px`,
+          opacity: isExiting ? 0 : 1,
+          transform: isExiting ? "scale(0.88)" : "scale(1)",
+          pointerEvents: isExiting ? "none" : "auto",
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           outline: isHovered ? "2px solid #38bdf8" : debugStyle?.border,
           boxShadow: isHovered ? "0 0 16px rgba(56, 189, 248, 0.5)" : "none",
-          zIndex: isHovered ? 10 : 1,
+          zIndex: isHovered ? 10 : isExiting ? 0 : 1,
           backgroundColor: isHovered ? "rgba(56, 189, 248, 0.12)" : debugStyle?.bg,
           borderRadius: resolved.type === "button" ? "8px" : "4px",
-          transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
-          cursor: "pointer",
+          transition:
+            "left 250ms cubic-bezier(0.4, 0, 0.2, 1), top 250ms cubic-bezier(0.4, 0, 0.2, 1), width 250ms cubic-bezier(0.4, 0, 0.2, 1), height 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 250ms ease, transform 250ms cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease, box-shadow 0.15s ease",
+          cursor: isExiting ? "default" : "pointer",
         };
 
         return (
@@ -162,6 +227,7 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                   justifyContent: "center",
                   wordBreak: "break-word",
                   overflow: "hidden",
+                  transition: "font-size 250ms cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
                 {resolved.content ?? (specElem?.type === "text" ? specElem.content : "")}
@@ -239,7 +305,7 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                   alignItems: "center",
                   justifyContent: "center",
                   boxShadow: "0 4px 12px rgba(37, 99, 235, 0.35)",
-                  transition: "background-color 0.15s ease",
+                  transition: "background-color 0.15s ease, font-size 250ms cubic-bezier(0.4, 0, 0.2, 1)",
                   padding: "0 16px",
                   boxSizing: "border-box",
                 }}
