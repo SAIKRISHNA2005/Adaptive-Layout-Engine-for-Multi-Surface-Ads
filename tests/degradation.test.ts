@@ -18,10 +18,11 @@ describe("Priority-Based Degradation Engine (Phase 4b)", () => {
       ],
     });
 
-    // Artificially constrained height kiosk surface (1080x380) where all 4 items cannot fit simultaneously
+    // Artificially constrained kiosk surface (400x380) where all 4 items cannot fit simultaneously
     const constrainedKiosk = defineSurface({
       ...retailKiosk,
       id: "shrunkKiosk",
+      width: 400,
       height: 380,
       safeArea: { top: 20, right: 30, bottom: 20, left: 30 },
     });

@@ -48,7 +48,8 @@ describe("RenderedAd (Phase 6 - DOM Renderer)", () => {
     const shrunkKiosk = defineSurface({
       ...retailKiosk,
       id: "shrunkKiosk",
-      height: 220,
+      width: 320,
+      height: 240,
       safeArea: { top: 10, right: 10, bottom: 10, left: 10 },
     });
 

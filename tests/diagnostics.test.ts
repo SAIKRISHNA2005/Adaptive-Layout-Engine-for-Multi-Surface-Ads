@@ -30,10 +30,11 @@ describe("Diagnostics & Explainability (Phase 5)", () => {
   });
 
   it("tags every degraded or dropped element with at least one elementId-tagged trace entry", () => {
-    // Artificial small height kiosk surface forcing degradation & dropping
+    // Artificial small kiosk surface forcing degradation & dropping
     const smallKiosk = defineSurface({
       ...retailKiosk,
       id: "smallKiosk",
+      width: 400,
       height: 380,
       safeArea: { top: 20, right: 20, bottom: 20, left: 20 },
     });

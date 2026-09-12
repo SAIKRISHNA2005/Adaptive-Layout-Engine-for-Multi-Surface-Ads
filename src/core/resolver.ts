@@ -21,6 +21,30 @@ export interface ResolveOptions {
   readonly textMeasurer?: TextMeasurer;
 }
 
+/** Layout geometric archetype category derived dynamically from surface aspect ratio. */
+export type LayoutArchetype = "TallStack" | "BalancedGrid" | "HorizontalSplit" | "UltraWideRibbon";
+
+/**
+ * Determines the geometric macro-archetype purely from aspect ratio.
+ *
+ * @param width - Surface width in pixels.
+ * @param height - Surface height in pixels.
+ * @returns Classified LayoutArchetype.
+ */
+export function determineLayoutArchetype(width: number, height: number): LayoutArchetype {
+  const aspectRatio = width / Math.max(1, height);
+  if (aspectRatio > 3.5) {
+    return "UltraWideRibbon";
+  }
+  if (aspectRatio > 1.35) {
+    return "HorizontalSplit";
+  }
+  if (aspectRatio >= 0.85) {
+    return "BalancedGrid";
+  }
+  return "TallStack";
+}
+
 /** Internal mutable state for an element during progressive degradation iterations. */
 interface ElementWorkingState {
   readonly original: AdElement;
@@ -182,6 +206,235 @@ function measureState(
   }
 }
 
+/** Spatial placement for 2-column HorizontalSplit archetype (e.g. Mobile Landscape 640x360). */
+function placeHorizontalSplit(
+  workingStates: ElementWorkingState[],
+  surface: SurfaceProfile,
+  measurer: TextMeasurer,
+  contentX: number,
+  contentY: number,
+  availableWidth: number,
+  availableHeight: number,
+): ResolvedElement[] {
+  const activeStates = workingStates.filter((s) => s.visible);
+  const heroState = activeStates.find((s) => s.role === "hero");
+  const contentStates = activeStates.filter((s) => s !== heroState);
+
+  const gutter = 16;
+  const leftColWidth = heroState ? Math.floor((availableWidth - gutter) * 0.44) : 0;
+  const rightColWidth = heroState ? availableWidth - leftColWidth - gutter : availableWidth;
+
+  const leftColX = contentX;
+  const rightColX = heroState ? contentX + leftColWidth + gutter : contentX;
+
+  const resolvedElements: ResolvedElement[] = [];
+
+  // 1. Hero in left column
+  if (heroState) {
+    const heroMeasured = measureState(heroState, surface, leftColWidth, availableHeight, measurer);
+    const heroWidth = Math.min(leftColWidth, heroMeasured.width);
+    const heroHeight = Math.min(availableHeight, heroMeasured.height);
+    const heroX = leftColX + Math.max(0, Math.round((leftColWidth - heroWidth) / 2));
+    const heroY = contentY + Math.max(0, Math.round((availableHeight - heroHeight) / 2));
+
+    resolvedElements.push({
+      id: heroState.id,
+      type: heroState.type,
+      role: heroState.role,
+      priority: heroState.priority,
+      x: heroX,
+      y: heroY,
+      width: heroWidth,
+      height: heroHeight,
+      status: heroState.status,
+      decisions: [...heroState.decisions],
+      src: heroState.type === "image" && heroState.original.type === "image" ? heroState.original.src : undefined,
+      visible: true,
+    });
+  }
+
+  // 2. Remaining elements in right column
+  const sortedRightStates = [...contentStates].sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    const roleRank: Record<ElementRole, number> = { primary: 1, action: 2, secondary: 3, branding: 4, hero: 5 };
+    return roleRank[a.role] - roleRank[b.role];
+  });
+
+  const measuredRightItems = sortedRightStates.map((st) => ({
+    state: st,
+    measured: measureState(st, surface, rightColWidth, availableHeight, measurer),
+  }));
+
+  const totalRightHeight = measuredRightItems.reduce((sum, item) => sum + item.measured.height, 0);
+  let gap = 10;
+  if (measuredRightItems.length > 1) {
+    const space = availableHeight - totalRightHeight;
+    gap = Math.max(4, Math.min(12, Math.floor(space / (measuredRightItems.length - 1))));
+  }
+
+  let currentY = contentY + Math.max(0, Math.round((availableHeight - (totalRightHeight + (measuredRightItems.length - 1) * gap)) / 2));
+  for (const item of measuredRightItems) {
+    const { state, measured } = item;
+    const itemW = Math.min(rightColWidth, measured.width);
+    const itemX = rightColX + Math.max(0, Math.round((rightColWidth - itemW) / 2));
+    const itemY = currentY;
+
+    resolvedElements.push({
+      id: state.id,
+      type: state.type,
+      role: state.role,
+      priority: state.priority,
+      x: itemX,
+      y: itemY,
+      width: itemW,
+      height: measured.height,
+      fontSize: measured.fontSize,
+      status: state.status,
+      decisions: [...state.decisions],
+      content: state.type === "text" ? state.displayText : undefined,
+      label: state.type === "button" ? state.displayText : undefined,
+      src: state.type === "image" && state.original.type === "image" ? state.original.src : undefined,
+      visible: true,
+    });
+
+    currentY += measured.height + gap;
+  }
+
+  return resolvedElements;
+}
+
+/** Spatial placement for UltraWideRibbon archetype (e.g. Broadcast TV Lower-Third 1920x250). */
+function placeUltraWideRibbon(
+  workingStates: ElementWorkingState[],
+  surface: SurfaceProfile,
+  measurer: TextMeasurer,
+  contentX: number,
+  contentY: number,
+  availableWidth: number,
+  availableHeight: number,
+): ResolvedElement[] {
+  const activeStates = workingStates.filter((s) => s.visible);
+  const resolvedElements: ResolvedElement[] = [];
+
+  const brandingState = activeStates.find((s) => s.role === "branding");
+  const heroState = activeStates.find((s) => s.role === "hero");
+  const ctaState = activeStates.find((s) => s.role === "action");
+  const textStates = activeStates.filter((s) => s.role === "primary" || s.role === "secondary");
+
+  const gap = 24;
+  let currentX = contentX;
+
+  // 1. Branding on far left
+  if (brandingState) {
+    const brandMeasured = measureState(brandingState, surface, 160, availableHeight, measurer);
+    const brandW = Math.min(180, brandMeasured.width);
+    const brandH = Math.min(availableHeight, brandMeasured.height);
+    const brandY = contentY + Math.max(0, Math.round((availableHeight - brandH) / 2));
+
+    resolvedElements.push({
+      id: brandingState.id,
+      type: brandingState.type,
+      role: brandingState.role,
+      priority: brandingState.priority,
+      x: currentX,
+      y: brandY,
+      width: brandW,
+      height: brandH,
+      status: brandingState.status,
+      decisions: [...brandingState.decisions],
+      src: brandingState.type === "image" && brandingState.original.type === "image" ? brandingState.original.src : undefined,
+      visible: true,
+    });
+    currentX += brandW + gap;
+  }
+
+  // 2. Hero thumbnail next
+  if (heroState) {
+    const heroMaxW = Math.round(availableHeight * 1.3);
+    const heroMeasured = measureState(heroState, surface, heroMaxW, availableHeight, measurer);
+    const heroW = Math.min(heroMaxW, heroMeasured.width);
+    const heroH = Math.min(availableHeight, heroMeasured.height);
+    const heroY = contentY + Math.max(0, Math.round((availableHeight - heroH) / 2));
+
+    resolvedElements.push({
+      id: heroState.id,
+      type: heroState.type,
+      role: heroState.role,
+      priority: heroState.priority,
+      x: currentX,
+      y: heroY,
+      width: heroW,
+      height: heroH,
+      status: heroState.status,
+      decisions: [...heroState.decisions],
+      src: heroState.type === "image" && heroState.original.type === "image" ? heroState.original.src : undefined,
+      visible: true,
+    });
+    currentX += heroW + gap;
+  }
+
+  // 3. CTA on far right
+  let ctaW = 0;
+  if (ctaState) {
+    const ctaMeasured = measureState(ctaState, surface, 320, availableHeight, measurer);
+    ctaW = Math.min(340, ctaMeasured.width);
+    const ctaH = Math.min(availableHeight, ctaMeasured.height);
+    const ctaX = contentX + availableWidth - ctaW;
+    const ctaY = contentY + Math.max(0, Math.round((availableHeight - ctaH) / 2));
+
+    resolvedElements.push({
+      id: ctaState.id,
+      type: ctaState.type,
+      role: ctaState.role,
+      priority: ctaState.priority,
+      x: ctaX,
+      y: ctaY,
+      width: ctaW,
+      height: ctaH,
+      fontSize: ctaMeasured.fontSize,
+      status: ctaState.status,
+      decisions: [...ctaState.decisions],
+      label: ctaState.displayText,
+      visible: true,
+    });
+  }
+
+  // 4. Headline & Price in center column
+  const centerColWidth = Math.max(100, contentX + availableWidth - (ctaW > 0 ? ctaW + gap : 0) - currentX);
+  const measuredTextItems = textStates.map((st) => ({
+    state: st,
+    measured: measureState(st, surface, centerColWidth, availableHeight, measurer),
+  }));
+
+  const totalTextH = measuredTextItems.reduce((sum, item) => sum + item.measured.height, 0);
+  const textGap = 6;
+  let textY = contentY + Math.max(0, Math.round((availableHeight - (totalTextH + (measuredTextItems.length - 1) * textGap)) / 2));
+
+  for (const item of measuredTextItems) {
+    const { state, measured } = item;
+    const itemW = Math.min(centerColWidth, measured.width);
+
+    resolvedElements.push({
+      id: state.id,
+      type: state.type,
+      role: state.role,
+      priority: state.priority,
+      x: currentX,
+      y: textY,
+      width: itemW,
+      height: measured.height,
+      fontSize: measured.fontSize,
+      status: state.status,
+      decisions: [...state.decisions],
+      content: state.displayText,
+      visible: true,
+    });
+    textY += measured.height + textGap;
+  }
+
+  return resolvedElements;
+}
+
 /** Generates a candidate ResolvedLayout from the current working state. */
 function buildCandidateLayout(
   workingStates: ElementWorkingState[],
@@ -194,66 +447,90 @@ function buildCandidateLayout(
   const availableWidth = Math.max(1, surface.width - (safeArea.left + safeArea.right));
   const availableHeight = Math.max(1, surface.height - (safeArea.top + safeArea.bottom));
 
-  // Sort visible elements by priority for top-to-bottom layout
-  const activeStates = workingStates.filter((s) => s.visible);
-  const sortedStates = [...activeStates].sort((a, b) => {
-    if (a.priority !== b.priority) {
-      return a.priority - b.priority;
-    }
-    const roleRank: Record<ElementRole, number> = {
-      hero: 1,
-      primary: 2,
-      action: 3,
-      secondary: 4,
-      branding: 5,
-    };
-    return roleRank[a.role] - roleRank[b.role];
-  });
+  const archetype = determineLayoutArchetype(surface.width, surface.height);
+  let resolvedElements: ResolvedElement[];
 
-  const measuredItems = sortedStates.map((st) => ({
-    state: st,
-    measured: measureState(st, surface, availableWidth, availableHeight, measurer),
-  }));
-
-  // Dynamic vertical gap budgeting
-  const totalMeasuredHeight = measuredItems.reduce((sum, item) => sum + item.measured.height, 0);
-  const numItems = measuredItems.length;
-  let gap = 12;
-
-  if (numItems > 1) {
-    const leftoverSpace = availableHeight - totalMeasuredHeight;
-    if (leftoverSpace < (numItems - 1) * gap) {
-      gap = Math.max(4, Math.floor(leftoverSpace / (numItems - 1)));
-    }
-  }
-
-  let currentY = contentY;
-  const resolvedElements: ResolvedElement[] = [];
-
-  for (const item of measuredItems) {
-    const { state, measured } = item;
-    const x = contentX + Math.max(0, Math.round((availableWidth - measured.width) / 2));
-    const y = currentY;
-
-    resolvedElements.push({
-      id: state.id,
-      type: state.type,
-      role: state.role,
-      priority: state.priority,
-      x,
-      y,
-      width: measured.width,
-      height: measured.height,
-      fontSize: measured.fontSize,
-      status: state.status,
-      decisions: [...state.decisions],
-      content: state.type === "text" ? state.displayText : undefined,
-      label: state.type === "button" ? state.displayText : undefined,
-      src: state.type === "image" && state.original.type === "image" ? state.original.src : undefined,
-      visible: true,
+  if (archetype === "HorizontalSplit") {
+    resolvedElements = placeHorizontalSplit(
+      workingStates,
+      surface,
+      measurer,
+      contentX,
+      contentY,
+      availableWidth,
+      availableHeight,
+    );
+  } else if (archetype === "UltraWideRibbon") {
+    resolvedElements = placeUltraWideRibbon(
+      workingStates,
+      surface,
+      measurer,
+      contentX,
+      contentY,
+      availableWidth,
+      availableHeight,
+    );
+  } else {
+    // TallStack & BalancedGrid default vertical flow
+    const activeStates = workingStates.filter((s) => s.visible);
+    const sortedStates = [...activeStates].sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      const roleRank: Record<ElementRole, number> = {
+        hero: 1,
+        primary: 2,
+        action: 3,
+        secondary: 4,
+        branding: 5,
+      };
+      return roleRank[a.role] - roleRank[b.role];
     });
 
-    currentY += measured.height + gap;
+    const measuredItems = sortedStates.map((st) => ({
+      state: st,
+      measured: measureState(st, surface, availableWidth, availableHeight, measurer),
+    }));
+
+    const totalMeasuredHeight = measuredItems.reduce((sum, item) => sum + item.measured.height, 0);
+    const numItems = measuredItems.length;
+    let gap = 12;
+
+    if (numItems > 1) {
+      const leftoverSpace = availableHeight - totalMeasuredHeight;
+      if (leftoverSpace < (numItems - 1) * gap) {
+        gap = Math.max(4, Math.floor(leftoverSpace / (numItems - 1)));
+      }
+    }
+
+    let currentY = contentY;
+    resolvedElements = [];
+
+    for (const item of measuredItems) {
+      const { state, measured } = item;
+      const x = contentX + Math.max(0, Math.round((availableWidth - measured.width) / 2));
+      const y = currentY;
+
+      resolvedElements.push({
+        id: state.id,
+        type: state.type,
+        role: state.role,
+        priority: state.priority,
+        x,
+        y,
+        width: measured.width,
+        height: measured.height,
+        fontSize: measured.fontSize,
+        status: state.status,
+        decisions: [...state.decisions],
+        content: state.type === "text" ? state.displayText : undefined,
+        label: state.type === "button" ? state.displayText : undefined,
+        src: state.type === "image" && state.original.type === "image" ? state.original.src : undefined,
+        visible: true,
+      });
+
+      currentY += measured.height + gap;
+    }
   }
 
   // Include dropped elements as non-visible with 0 dimensions
@@ -287,7 +564,7 @@ function buildCandidateLayout(
       hardViolations: 0,
       overlapCount: 0,
       clippingCount: 0,
-      archetype: "VerticalStack",
+      archetype,
     },
   };
 
@@ -431,10 +708,11 @@ export function resolveWithDiagnostics(
   const safeArea = surface.safeArea ?? { top: 0, right: 0, bottom: 0, left: 0 };
   const availableWidth = Math.max(1, surface.width - (safeArea.left + safeArea.right));
   const availableHeight = Math.max(1, surface.height - (safeArea.top + safeArea.bottom));
+  const archetype = determineLayoutArchetype(surface.width, surface.height);
 
   diagnostics.record(
     "normalize",
-    `Normalized surface bounds: ${surface.width}x${surface.height}px with safeArea insets [top:${safeArea.top}, right:${safeArea.right}, bottom:${safeArea.bottom}, left:${safeArea.left}]. Active content area: ${availableWidth}x${availableHeight}px.`,
+    `Normalized surface bounds: ${surface.width}x${surface.height}px (Aspect ratio: ${(surface.width / surface.height).toFixed(2)}, Archetype: ${archetype}) with safeArea insets [top:${safeArea.top}, right:${safeArea.right}, bottom:${safeArea.bottom}, left:${safeArea.left}]. Active content area: ${availableWidth}x${availableHeight}px.`,
   );
   diagnostics.record(
     "normalize",
@@ -458,7 +736,7 @@ export function resolveWithDiagnostics(
   const activeCount = workingStates.filter((s) => s.visible).length;
   diagnostics.record(
     "place",
-    `Initial spatial placement pass: positioned ${activeCount}/${spec.elements.length} elements in vertical stack layout.`,
+    `Initial spatial placement pass: positioned ${activeCount}/${spec.elements.length} elements using ${archetype} archetype.`,
   );
 
   let validation = validateLayout(currentLayout, surface, spec);
