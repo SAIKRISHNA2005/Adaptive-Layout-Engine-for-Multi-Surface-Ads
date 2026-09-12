@@ -7,7 +7,7 @@ import {
   broadcastLowerThird,
   retailKiosk,
 } from "../src/core/surfaces";
-import { resolve } from "../src/core/resolver";
+import { resolve, resolveWithDiagnostics } from "../src/core/resolver";
 import { computeOverlap, computeClipping, rectsOverlap } from "../src/core/scoring";
 import { EstimateTextMeasurer, type TextMeasurer } from "../src/measurement/text-measurer";
 import { type ResolvedElement, type ResolvedLayout } from "../src/core/types";
@@ -156,3 +156,74 @@ describe("Scoring Geometry Utilities", () => {
     expect(wrappedText.width).toBeLessThanOrEqual(200);
   });
 });
+
+describe("Adversarial Edge Cases (Phase 18 - Review Hunting)", () => {
+  it("resolves two elements with identical preferred positions without overlap", () => {
+    const identicalPosSpec = defineAd({
+      id: "identical-pos-spec",
+      elements: [
+        { id: "heading-1", type: "text", role: "primary", priority: 1, content: "Primary Headline" },
+        { id: "heading-2", type: "text", role: "primary", priority: 1, content: "Duplicate Priority Headline" },
+      ],
+    });
+
+    const result = resolveWithDiagnostics(identicalPosSpec, mobilePortrait);
+    expect(result.diagnostics.summary.overlaps).toBe(0);
+    expect(result.diagnostics.summary.clipping).toBe(0);
+    expect(result.layout.elements).toHaveLength(2);
+
+    const [e1, e2] = result.layout.elements;
+    expect(rectsOverlap(e1!, e2!)).toBe(false);
+  });
+
+  it("clamps an element with preferredWidth larger than the entire surface to safe bounds without clipping", () => {
+    const oversizedSpec = defineAd({
+      id: "oversized-spec",
+      elements: [
+        {
+          id: "huge-image",
+          type: "image",
+          role: "hero",
+          priority: 1,
+          preferredWidth: 3200, // 10x larger than 320px mobile portrait
+          preferredHeight: 1800,
+          aspectRatio: 1.777,
+        },
+      ],
+    });
+
+    const result = resolveWithDiagnostics(oversizedSpec, mobilePortrait);
+    expect(result.diagnostics.summary.clipping).toBe(0);
+    const hero = result.layout.elements.find((e) => e.id === "huge-image");
+    expect(hero).toBeDefined();
+    expect(hero!.width).toBeLessThanOrEqual(mobilePortrait.width);
+    expect(hero!.x + hero!.width).toBeLessThanOrEqual(mobilePortrait.width);
+  });
+
+  it("handles a spec with zero droppable elements under extreme spatial starvation without crashing", () => {
+    const nonDroppableSpec = defineAd({
+      id: "strict-spec",
+      elements: [
+        { id: "strict-1", type: "text", role: "primary", priority: 1, content: "Must Keep Title", canDrop: false },
+        { id: "strict-2", type: "button", role: "action", priority: 1, label: "Must Keep Button", canDrop: false, minTapTarget: 44 },
+      ],
+    });
+
+    // Tiny 40x40 surface where a 44px button physically cannot fit without violation
+    const microSurface = {
+      id: "micro-screen",
+      name: "Micro Screen",
+      width: 40,
+      height: 40,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    };
+
+    const result = resolveWithDiagnostics(nonDroppableSpec, microSurface);
+    // Does not crash, strictly honors canDrop: false
+    expect(result.layout.elements.every((e) => e.visible)).toBe(true);
+    expect(result.layout.elements.every((e) => e.status !== "dropped")).toBe(true);
+    // Documents physical violation in diagnostics summary
+    expect(result.diagnostics.summary.violations?.length).toBeGreaterThan(0);
+  });
+});
+

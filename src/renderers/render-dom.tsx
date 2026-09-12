@@ -159,7 +159,8 @@ export const RenderedAd: FC<RenderedAdProps> = ({
         maxWidth: `${surface.width}px`,
         maxHeight: `${surface.height}px`,
         overflow: "hidden",
-        backgroundColor: "#090d16",
+        background:
+          "radial-gradient(ellipse at 50% 0%, rgba(30, 58, 138, 0.22) 0%, #080c14 75%)",
         color: "#ffffff",
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -192,7 +193,7 @@ export const RenderedAd: FC<RenderedAdProps> = ({
           boxShadow: isHovered ? "0 0 16px rgba(56, 189, 248, 0.5)" : "none",
           zIndex: isHovered ? 10 : isExiting ? 0 : 1,
           backgroundColor: isHovered ? "rgba(56, 189, 248, 0.12)" : debugStyle?.bg,
-          borderRadius: resolved.type === "button" ? "8px" : "4px",
+          borderRadius: resolved.type === "button" ? "10px" : "4px",
           transition:
             "left 250ms cubic-bezier(0.4, 0, 0.2, 1), top 250ms cubic-bezier(0.4, 0, 0.2, 1), width 250ms cubic-bezier(0.4, 0, 0.2, 1), height 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 250ms ease, transform 250ms cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease, box-shadow 0.15s ease",
           cursor: isExiting ? "default" : "pointer",
@@ -223,14 +224,68 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                   textAlign: "center",
                   color: resolved.role === "secondary" ? "#94a3b8" : "#f8fafc",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
                   wordBreak: "break-word",
                   overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  boxSizing: "border-box",
                   transition: "font-size 250ms cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
-                {resolved.content ?? (specElem?.type === "text" ? specElem.content : "")}
+                {resolved.id === "price-tag" ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      padding: "4px 14px",
+                      borderRadius: "9999px",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                      color: "#34d399",
+                      fontWeight: 600,
+                      fontSize: `${Math.max(11, resolved.fontSize ?? 14)}px`,
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
+                      overflow: "hidden",
+                      maxWidth: "100%",
+                      boxSizing: "border-box",
+                      boxShadow: "0 2px 8px rgba(16, 185, 129, 0.15)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: "#10b981",
+                        boxShadow: "0 0 6px #10b981",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {resolved.content ?? (specElem?.type === "text" ? specElem.content : "")}
+                    </span>
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: Math.max(1, Math.floor(resolved.height / ((resolved.fontSize ?? 16) * 1.25))),
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      letterSpacing: resolved.role === "primary" ? "-0.015em" : "normal",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {resolved.content ?? (specElem?.type === "text" ? specElem.content : "")}
+                  </span>
+                )}
               </p>
             )}
 
@@ -246,12 +301,12 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                   justifyContent: "center",
                   background:
                     resolved.role === "hero"
-                      ? "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
-                      : "rgba(30, 41, 59, 0.6)",
-                  borderRadius: "6px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                      ? "radial-gradient(ellipse at center, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%)"
+                      : "transparent",
+                  borderRadius: resolved.role === "hero" ? "12px" : "6px",
+                  border: resolved.role === "hero" ? "1px solid rgba(255, 255, 255, 0.08)" : "none",
                   overflow: "hidden",
-                  padding: "4px",
+                  padding: resolved.role === "hero" ? "6px" : "2px",
                   boxSizing: "border-box",
                 }}
               >
@@ -265,24 +320,94 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                       objectFit: "contain",
                     }}
                   />
-                ) : (
+                ) : resolved.role === "branding" || resolved.id === "brand-logo" || resolved.id === "logo" ? (
                   <div
                     style={{
                       display: "flex",
-                      flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "4px",
-                      color: "#94a3b8",
-                      fontSize: `${Math.max(10, Math.min(14, Math.round(resolved.height * 0.15)))}px`,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
+                      gap: "6px",
+                      width: "100%",
+                      height: "100%",
+                      overflow: "hidden",
                     }}
                   >
-                    <span style={{ fontSize: "1.4em" }}>{resolved.role === "hero" ? "🖼️" : "🏷️"}</span>
-                    <span>{resolved.id}</span>
+                    <svg
+                      width={Math.min(22, Math.max(14, Math.round(resolved.height * 0.5)))}
+                      height={Math.min(22, Math.max(14, Math.round(resolved.height * 0.5)))}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ flexShrink: 0 }}
+                    >
+                      <path
+                        d="M3 10v4M7 6v12M11 3v18M15 7v10M19 11v2"
+                        stroke="#38bdf8"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        letterSpacing: "0.06em",
+                        fontSize: `${Math.min(12, Math.max(9, Math.round(resolved.height * 0.34)))}px`,
+                        color: "#f8fafc",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Aero<span style={{ color: "#38bdf8" }}>Tune</span>
+                    </span>
                   </div>
+                ) : (
+                  <svg
+                    viewBox="0 0 300 240"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      maxHeight: "100%",
+                      filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
+                    }}
+                  >
+                    <path
+                      d="M60 140 C 60 40, 240 40, 240 140"
+                      stroke="url(#headbandGrad)"
+                      strokeWidth="16"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M72 135 C 72 58, 228 58, 228 135"
+                      stroke="#1e293b"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                    />
+                    <rect x="52" y="125" width="16" height="24" rx="4" fill="#94a3b8" />
+                    <rect x="232" y="125" width="16" height="24" rx="4" fill="#94a3b8" />
+                    <g transform="rotate(-10 55 160)">
+                      <ellipse cx="55" cy="165" rx="34" ry="46" fill="#0f172a" stroke="#38bdf8" strokeWidth="2" />
+                      <ellipse cx="55" cy="165" rx="26" ry="36" fill="#1e293b" />
+                      <ellipse cx="55" cy="165" rx="16" ry="24" fill="#090d16" />
+                      <circle cx="55" cy="165" r="8" fill="none" stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.8" />
+                    </g>
+                    <g transform="rotate(10 245 160)">
+                      <ellipse cx="245" cy="165" rx="34" ry="46" fill="#0f172a" stroke="#38bdf8" strokeWidth="2" />
+                      <ellipse cx="245" cy="165" rx="26" ry="36" fill="#1e293b" />
+                      <ellipse cx="245" cy="165" rx="16" ry="24" fill="#090d16" />
+                      <circle cx="245" cy="165" r="8" fill="none" stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.8" />
+                    </g>
+                    <circle cx="150" cy="150" r="70" stroke="rgba(56, 189, 248, 0.15)" strokeWidth="1.5" strokeDasharray="6 6" />
+                    <circle cx="150" cy="150" r="95" stroke="rgba(56, 189, 248, 0.08)" strokeWidth="1" strokeDasharray="4 8" />
+                    <defs>
+                      <linearGradient id="headbandGrad" x1="60" y1="40" x2="240" y2="40" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#334155" />
+                        <stop offset="50%" stopColor="#64748b" />
+                        <stop offset="100%" stopColor="#334155" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
                 )}
               </div>
             )}
@@ -294,23 +419,43 @@ export const RenderedAd: FC<RenderedAdProps> = ({
                 style={{
                   width: "100%",
                   height: "100%",
-                  backgroundColor: isHovered ? "#1d4ed8" : "#2563eb",
+                  background: isHovered
+                    ? "linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)"
+                    : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
                   color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: "10px",
                   fontWeight: 600,
-                  fontSize: `${resolved.fontSize ?? 16}px`,
+                  fontSize: `${resolved.fontSize ?? 15}px`,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 4px 12px rgba(37, 99, 235, 0.35)",
-                  transition: "background-color 0.15s ease, font-size 250ms cubic-bezier(0.4, 0, 0.2, 1)",
+                  gap: "8px",
+                  boxShadow: isHovered
+                    ? "0 6px 20px rgba(37, 99, 235, 0.5), inset 0 1px 0 rgba(255,255,255,0.25)"
+                    : "0 4px 14px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
+                  transform: isHovered ? "translateY(-1px)" : "none",
+                  transition: "all 0.15s ease",
                   padding: "0 16px",
                   boxSizing: "border-box",
+                  letterSpacing: "0.01em",
                 }}
               >
-                {resolved.label ?? (specElem?.type === "button" ? specElem.label : "Click Here")}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {resolved.label ?? (specElem?.type === "button" ? specElem.label : "Click Here")}
+                </span>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-block",
+                    transition: "transform 0.15s ease",
+                    transform: isHovered ? "translateX(2px)" : "none",
+                    flexShrink: 0,
+                  }}
+                >
+                  →
+                </span>
               </button>
             )}
 

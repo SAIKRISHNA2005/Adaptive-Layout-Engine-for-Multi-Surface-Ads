@@ -45,7 +45,7 @@ export function rectsOverlap(a: Rect, b: Rect, epsilon = 0.5): boolean {
  */
 export function computeOverlap(target: ResolvedLayout | readonly ResolvedElement[]): number {
   const elements: readonly ResolvedElement[] =
-    "elements" in target ? target.elements : (target as readonly ResolvedElement[]);
+    "elements" in target ? target.elements : target;
   const visibleElements = elements.filter((el: ResolvedElement) => el.visible);
 
   let overlapCount = 0;

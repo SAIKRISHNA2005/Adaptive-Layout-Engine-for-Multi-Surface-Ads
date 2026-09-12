@@ -117,9 +117,11 @@ export const CustomSurfaceEditor: React.FC<CustomSurfaceEditorProps> = ({
         backgroundColor: "#0b1120",
         border: "1px solid rgba(147, 51, 234, 0.4)",
         borderRadius: "16px",
-        padding: "24px",
+        padding: "20px",
         color: "#f8fafc",
-        maxWidth: "680px",
+        maxWidth: "640px",
+        maxHeight: "calc(100vh - 40px)",
+        overflowY: "auto",
         width: "100%",
         boxShadow: "0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(147, 51, 234, 0.2)",
         boxSizing: "border-box",
@@ -127,9 +129,8 @@ export const CustomSurfaceEditor: React.FC<CustomSurfaceEditorProps> = ({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#c084fc", display: "flex", alignItems: "center", gap: "8px" }}>
-            <span>🛠️</span>
-            <span>Custom Surface Profile Editor</span>
+          <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#c084fc" }}>
+            Custom Surface Profile Editor
           </h2>
           <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#94a3b8" }}>
             Define arbitrary, unknown-at-design-time surface topologies to test engine generalization
@@ -404,7 +405,12 @@ export const CustomSurfaceEditor: React.FC<CustomSurfaceEditorProps> = ({
             <select
               id="viewing-distance-select"
               value={form.viewingDistance}
-              onChange={(e) => setForm({ ...form, viewingDistance: e.target.value as ViewingDistance })}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "near" || val === "medium" || val === "far") {
+                  setForm({ ...form, viewingDistance: val });
+                }
+              }}
               style={{
                 width: "100%",
                 padding: "8px 12px",

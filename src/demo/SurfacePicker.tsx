@@ -9,6 +9,14 @@ import {
   stressTestSurface,
 } from "../core/surfaces";
 import { type SurfaceProfile } from "../core/types";
+import {
+  IconPhonePortrait,
+  IconPhoneLandscape,
+  IconBroadcast,
+  IconKiosk,
+  IconStress,
+  IconPlus,
+} from "./Icons";
 
 /** Preset surfaces available in the demo surface picker. */
 export const DEMO_SURFACES: readonly SurfaceProfile[] = [
@@ -18,6 +26,25 @@ export const DEMO_SURFACES: readonly SurfaceProfile[] = [
   retailKiosk,
   stressTestSurface,
 ];
+
+/** Returns bespoke vector icon matching surface form factor. */
+const getSurfaceIcon = (id: string, isSelected: boolean) => {
+  const color = isSelected ? "var(--accent-secondary)" : "var(--text-muted)";
+  switch (id) {
+    case "mobilePortrait":
+      return <IconPhonePortrait size={16} color={color} />;
+    case "mobileLandscape":
+      return <IconPhoneLandscape size={16} color={color} />;
+    case "broadcastLowerThird":
+      return <IconBroadcast size={16} color={color} />;
+    case "retailKiosk":
+      return <IconKiosk size={16} color={color} />;
+    case "stressTest":
+      return <IconStress size={16} color={color} />;
+    default:
+      return <IconPhonePortrait size={16} color={color} />;
+  }
+};
 
 /** Props for the SurfacePicker component. */
 export interface SurfacePickerProps {
@@ -64,7 +91,6 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
       {surfaces.map((surface) => {
         const isSelected = surface.id === selectedSurfaceId;
         const aspectRatio = (surface.width / surface.height).toFixed(2);
-        const isStress = surface.id === "stressTest";
 
         return (
           <button
@@ -76,19 +102,19 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-start",
-              gap: "4px",
+              gap: "5px",
               padding: "10px 14px",
               backgroundColor: isSelected
-                ? "rgba(59, 130, 246, 0.16)"
+                ? "rgba(59, 130, 246, 0.14)"
                 : "rgba(255, 255, 255, 0.02)",
               color: isSelected ? "#ffffff" : "#94a3b8",
               border: isSelected
-                ? "1px solid #3b82f6"
-                : "1px solid rgba(255, 255, 255, 0.06)",
+                ? "1px solid var(--accent-primary)"
+                : "1px solid var(--border-subtle)",
               borderRadius: "8px",
               cursor: "pointer",
               transition: "all 0.15s ease",
-              boxShadow: isSelected ? "0 2px 12px rgba(59, 130, 246, 0.25)" : "none",
+              boxShadow: isSelected ? "0 2px 14px var(--accent-glow)" : "none",
               position: "relative",
               textAlign: "left",
               width: "100%",
@@ -102,35 +128,25 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
                   top: 0,
                   bottom: 0,
                   width: "3px",
-                  backgroundColor: isStress ? "#ef4444" : "#3b82f6",
+                  backgroundColor: "var(--accent-secondary)",
                   borderRadius: "8px 0 0 8px",
                 }}
               />
             )}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+              <span style={{ display: "flex", alignItems: "center" }}>
+                {getSurfaceIcon(surface.id, isSelected)}
+              </span>
               <span style={{ fontWeight: 600, fontSize: "13px", color: isSelected ? "#ffffff" : "#cbd5e1" }}>
                 {surface.name}
               </span>
-              {isStress && (
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    color: "#f87171",
-                    backgroundColor: "rgba(239, 68, 68, 0.15)",
-                    padding: "1px 5px",
-                    borderRadius: "4px",
-                  }}
-                >
-                  STRESS
-                </span>
-              )}
             </div>
             <span
               style={{
                 fontSize: "11px",
                 fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                color: isSelected ? "#93c5fd" : "#64748b",
+                color: isSelected ? "var(--accent-secondary)" : "var(--text-muted)",
+                paddingLeft: "24px",
               }}
             >
               {surface.width}×{surface.height}px • AR {aspectRatio}
@@ -152,7 +168,7 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           padding: "10px 14px",
           backgroundColor:
             isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
-              ? "rgba(147, 51, 234, 0.16)"
+              ? "rgba(168, 85, 247, 0.14)"
               : "rgba(255, 255, 255, 0.02)",
           color:
             isCustomEditorOpen || selectedSurfaceId.startsWith("custom")
@@ -169,8 +185,11 @@ export const SurfacePicker: React.FC<SurfacePickerProps> = ({
           textAlign: "left",
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: "13px" }}>✨ + Custom Surface</span>
-        <span style={{ fontSize: "11px", opacity: 0.8 }}>Unseen 5th Profile</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+          <IconPlus size={16} color={isCustomEditorOpen ? "#ffffff" : "#c084fc"} />
+          <span style={{ fontWeight: 600, fontSize: "13px" }}>Custom Surface</span>
+        </div>
+        <span style={{ fontSize: "11px", opacity: 0.8, paddingLeft: "24px" }}>Unseen 5th Profile</span>
       </button>
     </div>
   );

@@ -11,6 +11,8 @@ export interface ResolutionTraceProps {
   readonly hoveredElementId?: string | null;
   /** Callback fired when hovering over an element-associated trace step or tag. */
   readonly onHoverElement?: (elementId: string | null) => void;
+  /** Whether the trace is embedded inside a dock drawer (removes redundant outer box styling). */
+  readonly embedded?: boolean;
 }
 
 /** Stage badge styling colors. */
@@ -30,6 +32,7 @@ export const ResolutionTrace: React.FC<ResolutionTraceProps> = ({
   diagnostics,
   hoveredElementId,
   onHoverElement,
+  embedded = false,
 }) => {
   const { trace, summary } = diagnostics;
 
@@ -68,29 +71,36 @@ export const ResolutionTrace: React.FC<ResolutionTraceProps> = ({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "14px",
-        backgroundColor: "#0d1424",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-        borderRadius: "14px",
-        padding: "18px",
+        gap: embedded ? "8px" : "14px",
+        backgroundColor: embedded ? "transparent" : "#0d1424",
+        border: embedded ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+        borderRadius: embedded ? "0" : "14px",
+        padding: embedded ? "0" : "18px",
         color: "#f8fafc",
         fontSize: "13px",
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: embedded ? "2px" : "6px",
+        }}
+      >
         <div>
           <h3
             style={{
               margin: 0,
-              fontSize: "14px",
+              fontSize: embedded ? "12px" : "14px",
               fontWeight: 700,
               color: "#93c5fd",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}
           >
-            Resolution Trace
+            {embedded ? "Pipeline Steps" : "Resolution Trace"}
           </h3>
           <span style={{ fontSize: "11px", color: "#64748b" }}>
             {trace.length} deterministic steps in {summary.durationMs.toFixed(2)}ms
@@ -101,8 +111,8 @@ export const ResolutionTrace: React.FC<ResolutionTraceProps> = ({
             type="button"
             onClick={() => setCollapsedStages({})}
             style={{
-              fontSize: "11px",
-              padding: "3px 8px",
+              fontSize: embedded ? "10px" : "11px",
+              padding: embedded ? "2px 7px" : "3px 8px",
               backgroundColor: "rgba(255, 255, 255, 0.05)",
               border: "1px solid rgba(255, 255, 255, 0.1)",
               borderRadius: "4px",
@@ -120,8 +130,8 @@ export const ResolutionTrace: React.FC<ResolutionTraceProps> = ({
               setCollapsedStages(all);
             }}
             style={{
-              fontSize: "11px",
-              padding: "3px 8px",
+              fontSize: embedded ? "10px" : "11px",
+              padding: embedded ? "2px 7px" : "3px 8px",
               backgroundColor: "rgba(255, 255, 255, 0.05)",
               border: "1px solid rgba(255, 255, 255, 0.1)",
               borderRadius: "4px",
@@ -140,8 +150,8 @@ export const ResolutionTrace: React.FC<ResolutionTraceProps> = ({
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          maxHeight: "480px",
-          overflowY: "auto",
+          maxHeight: embedded ? "none" : "480px",
+          overflowY: embedded ? "visible" : "auto",
           paddingRight: "4px",
         }}
       >

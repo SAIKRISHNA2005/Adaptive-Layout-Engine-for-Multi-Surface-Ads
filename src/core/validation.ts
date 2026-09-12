@@ -171,7 +171,7 @@ export function parseAdSpec(input: unknown): AdSpec {
 
   return {
     id: parsedSpec.id,
-    elements: parsedSpec.elements as unknown as readonly AdElement[],
+    elements: parsedSpec.elements as readonly AdElement[],
   };
 }
 

@@ -12,7 +12,7 @@ import {
  * Demonstrates the polymorphic pluggability of the TextMeasurer interface.
  */
 export class CanvasTextMeasurer implements TextMeasurer {
-  private ctx: CanvasRenderingContext2D | null = null;
+  private ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
   private readonly fallbackMeasurer: EstimateTextMeasurer;
 
   constructor() {
@@ -20,9 +20,9 @@ export class CanvasTextMeasurer implements TextMeasurer {
   }
 
   /**
-   * Lazily initializes and reuses an off-screen CanvasRenderingContext2D.
+   * Lazily initializes and reuses an off-screen CanvasRenderingContext2D or OffscreenCanvasRenderingContext2D.
    */
-  private getContext(): CanvasRenderingContext2D | null {
+  private getContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null {
     if (this.ctx) {
       return this.ctx;
     }
@@ -33,7 +33,7 @@ export class CanvasTextMeasurer implements TextMeasurer {
         const offscreen = new OffscreenCanvas(400, 200);
         const ctx = offscreen.getContext("2d");
         if (ctx) {
-          this.ctx = ctx as unknown as CanvasRenderingContext2D;
+          this.ctx = ctx;
           return this.ctx;
         }
       } catch {

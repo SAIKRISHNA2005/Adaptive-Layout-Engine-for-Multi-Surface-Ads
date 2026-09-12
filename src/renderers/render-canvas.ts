@@ -4,7 +4,6 @@
 import {
   type AdElement,
   type AdSpec,
-  type ResolvedElement,
   type ResolvedLayout,
 } from "../core/types";
 
@@ -38,7 +37,7 @@ export function renderToCanvas(
   }
 
   // Draw active elements in sequence, skipping dropped and invisible elements
-  for (const resolved of layout.elements as ResolvedElement[]) {
+  for (const resolved of layout.elements) {
     if (!resolved.visible || resolved.status === "dropped") {
       continue;
     }

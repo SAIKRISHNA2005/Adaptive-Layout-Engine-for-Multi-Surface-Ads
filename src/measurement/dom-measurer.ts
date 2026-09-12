@@ -77,6 +77,8 @@ export class DOMTextMeasurer implements TextMeasurer {
     // Configure text and font sizing on the reused element
     container.textContent = text;
     container.style.fontSize = `${fontSize}px`;
+    container.style.fontWeight = input.fontWeight ? String(input.fontWeight) : "400";
+    container.style.lineHeight = "1.3";
 
     if (maxWidth && maxWidth > 0) {
       container.style.width = `${maxWidth}px`;

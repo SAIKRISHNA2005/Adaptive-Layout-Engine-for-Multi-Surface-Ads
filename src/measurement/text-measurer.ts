@@ -8,6 +8,8 @@ export interface TextMeasurementInput {
   readonly fontSize: number;
   /** Optional maximum container width to constrain line wrapping. */
   readonly maxWidth?: number;
+  /** Optional font weight (e.g. 700 for bold, 400 for normal) affecting glyph advance widths. */
+  readonly fontWeight?: string | number;
 }
 
 /** Result metrics computed from text measurement. */
@@ -38,10 +40,10 @@ export interface TextMeasurer {
 export class EstimateTextMeasurer implements TextMeasurer {
   /** Average glyph advance width ratio relative to font size (approx 0.58 for standard sans-serif). */
   private readonly avgCharWidthRatio: number;
-  /** Standard line height multiplier relative to font size (default 1.25). */
+  /** Standard line height multiplier relative to font size (default 1.3). */
   private readonly lineHeightMultiplier: number;
 
-  constructor(avgCharWidthRatio = 0.58, lineHeightMultiplier = 1.25) {
+  constructor(avgCharWidthRatio = 0.58, lineHeightMultiplier = 1.3) {
     this.avgCharWidthRatio = avgCharWidthRatio;
     this.lineHeightMultiplier = lineHeightMultiplier;
   }
@@ -59,7 +61,9 @@ export class EstimateTextMeasurer implements TextMeasurer {
     }
 
     const singleLineHeight = Math.ceil(fontSize * this.lineHeightMultiplier);
-    const avgCharWidth = fontSize * this.avgCharWidthRatio;
+    const isBold = input.fontWeight === 700 || input.fontWeight === "bold" || input.fontWeight === "700";
+    const weightFactor = isBold ? 1.08 : 1.0;
+    const avgCharWidth = fontSize * this.avgCharWidthRatio * weightFactor;
 
     // If no maxWidth is specified or maxWidth is infinite, treat as single line
     if (!maxWidth || maxWidth <= 0) {

@@ -35,6 +35,8 @@ export interface ResolutionDiagnostics {
     readonly clipping: number;
     /** Total pipeline execution time in milliseconds. */
     readonly durationMs: number;
+    /** Human-readable list of hard constraint violations detected if any remain unsatisfied. */
+    readonly violations?: readonly string[];
   };
 }
 

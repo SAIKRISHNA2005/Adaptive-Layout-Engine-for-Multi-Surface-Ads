@@ -133,15 +133,29 @@ function measureState(
 
   switch (state.type) {
     case "text": {
-      const fontSize = state.fontSize ?? 16;
+      const textElem = elem.type === "text" ? elem : undefined;
+      const isLargeDisplay = availableWidth >= 700 && availableHeight >= 700;
+      const isMobilePhonePortrait = availableWidth <= 400 && availableHeight >= 400 && availableHeight <= 700;
+      let fontSize = state.fontSize ?? textElem?.preferredFontSize ?? 16;
+      if (isLargeDisplay && textElem?.preferredFontSize && state.scale >= 1.0) {
+        // Responsively scale typography on large kiosk/monitor screens to fill canvas gracefully
+        fontSize = Math.round(textElem.preferredFontSize * 1.35);
+      } else if (isMobilePhonePortrait && elem.role === "primary" && fontSize > 22) {
+        // Crisp, punchy headline scaling on compact mobile screens to prevent vertical overflow
+        fontSize = 22;
+      }
+      fontSize = Math.max(state.minFontSize, fontSize);
+
+      const fontWeight = state.role === "hero" || state.role === "primary" ? 700 : 500;
       const measured = measurer.measure({
         text: state.displayText,
         fontSize,
         maxWidth: availableWidth,
+        fontWeight,
       });
 
       const width = Math.max(elem.minWidth ?? 0, Math.min(availableWidth, measured.width));
-      const height = Math.max(elem.minHeight ?? 0, measured.height);
+      const height = Math.max(elem.minHeight ?? 0, Math.ceil(measured.height));
 
       return { width, height, fontSize };
     }
@@ -153,21 +167,46 @@ function measureState(
       let baseWidth: number;
       let baseHeight: number;
 
-      if (elem.preferredWidth && elem.preferredHeight) {
-        let baseW = Math.min(availableWidth, elem.preferredWidth);
-        let baseH = Math.min(availableHeight, elem.preferredHeight);
-        if (aspectRatio) {
-          if (elem.preferredWidth > availableWidth) {
-            baseH = Math.min(availableHeight, Math.round(baseW / aspectRatio));
-          } else if (elem.preferredHeight > availableHeight) {
-            baseW = Math.min(availableWidth, Math.round(baseH * aspectRatio));
+      const isLargeKiosk = availableWidth >= 800 && availableHeight >= 800;
+      const isMobilePhonePortrait = availableWidth <= 400 && availableHeight >= 400 && availableHeight <= 700;
+
+      if (elem.role === "hero") {
+        if (isLargeKiosk) {
+          // Prominent hero product visual on grand kiosk/retail screens
+          baseWidth = Math.min(availableWidth * 0.55, 520);
+          baseHeight = Math.round(baseWidth / aspectRatio);
+        } else if (isMobilePhonePortrait) {
+          // On standard mobile portrait vertical stacks, balance hero height with headline/price/CTA
+          const maxHeroH = Math.min(elem.preferredHeight ?? 240, 130);
+          baseHeight = maxHeroH;
+          baseWidth = Math.min(availableWidth, Math.round(baseHeight * aspectRatio));
+        } else if (elem.preferredWidth && elem.preferredHeight) {
+          let baseW = Math.min(availableWidth, elem.preferredWidth);
+          let baseH = Math.min(availableHeight, elem.preferredHeight);
+          if (aspectRatio) {
+            if (elem.preferredWidth > availableWidth) {
+              baseH = Math.min(availableHeight, Math.round(baseW / aspectRatio));
+            } else if (elem.preferredHeight > availableHeight) {
+              baseW = Math.min(availableWidth, Math.round(baseH * aspectRatio));
+            }
           }
+          baseWidth = baseW;
+          baseHeight = baseH;
+        } else {
+          baseWidth = Math.min(availableWidth, Math.round(availableHeight * 0.45 * aspectRatio));
+          baseHeight = Math.round(baseWidth / aspectRatio);
         }
-        baseWidth = baseW;
-        baseHeight = baseH;
-      } else if (elem.role === "hero") {
-        baseWidth = Math.min(availableWidth, Math.round(availableHeight * 0.45 * aspectRatio));
-        baseHeight = Math.round(baseWidth / aspectRatio);
+      } else if (elem.role === "branding") {
+        if (isLargeKiosk) {
+          baseWidth = 160;
+          baseHeight = Math.round(baseWidth / aspectRatio);
+        } else if (isMobilePhonePortrait) {
+          baseWidth = Math.min(availableWidth * 0.35, 96);
+          baseHeight = Math.round(baseWidth / aspectRatio);
+        } else {
+          baseWidth = Math.min(availableWidth * 0.35, 100);
+          baseHeight = Math.round(baseWidth / aspectRatio);
+        }
       } else {
         baseWidth = Math.min(availableWidth * 0.35, 75);
         baseHeight = Math.round(baseWidth / aspectRatio);
@@ -191,11 +230,15 @@ function measureState(
         isTouchOnly ? 44 : 36,
       );
 
-      const fontSize = state.fontSize ?? 16;
+      const isLargeKiosk = availableWidth >= 800 && availableHeight >= 800;
+      const baseBtnFont = state.fontSize ?? 16;
+      const targetFont = isLargeKiosk ? Math.max(baseBtnFont, 20) : baseBtnFont;
+      const fontSize = Math.max(state.minFontSize, targetFont);
       const labelMeasured = measurer.measure({
         text: state.displayText,
         fontSize,
         maxWidth: availableWidth - 24,
+        fontWeight: 600,
       });
 
       const horizontalPadding = Math.round(28 * state.scale) + 8;
@@ -204,12 +247,13 @@ function measureState(
       const width = Math.max(
         minTap,
         elem.minWidth ?? 0,
-        Math.min(availableWidth, labelMeasured.width + horizontalPadding),
+        isLargeKiosk ? Math.min(availableWidth, 340) : Math.min(availableWidth, labelMeasured.width + horizontalPadding),
       );
       const height = Math.min(
         availableHeight,
         Math.max(
           minTap,
+          isLargeKiosk ? 64 : 44,
           elem.minHeight ?? 0,
           labelMeasured.height + verticalPadding,
         ),
@@ -269,8 +313,7 @@ function placeHorizontalSplit(
 
   // 2. Remaining elements in right column
   const sortedRightStates = [...contentStates].sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    const roleRank: Record<ElementRole, number> = { primary: 1, action: 2, secondary: 3, branding: 4, hero: 5 };
+    const roleRank: Record<ElementRole, number> = { branding: 1, primary: 2, secondary: 3, action: 4, hero: 5 };
     return roleRank[a.role] - roleRank[b.role];
   });
 
@@ -280,13 +323,14 @@ function placeHorizontalSplit(
   }));
 
   const totalRightHeight = measuredRightItems.reduce((sum, item) => sum + item.measured.height, 0);
-  let gap = 10;
+  let gap = 8;
   if (measuredRightItems.length > 1) {
     const space = availableHeight - totalRightHeight;
-    gap = Math.max(4, Math.min(12, Math.floor(space / (measuredRightItems.length - 1))));
+    gap = Math.max(2, Math.min(14, Math.floor(space / (measuredRightItems.length - 1))));
   }
 
-  let currentY = contentY + Math.max(0, Math.round((availableHeight - (totalRightHeight + (measuredRightItems.length - 1) * gap)) / 2));
+  const totalBlockH = totalRightHeight + (measuredRightItems.length - 1) * gap;
+  let currentY = contentY + Math.max(0, Math.round((availableHeight - totalBlockH) / 2));
   for (const item of measuredRightItems) {
     const { state, measured } = item;
     const itemW = Math.min(rightColWidth, measured.width);
@@ -489,15 +533,12 @@ function buildCandidateLayout(
     // TallStack & BalancedGrid default vertical flow
     const activeStates = workingStates.filter((s) => s.visible);
     const sortedStates = [...activeStates].sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
-      }
       const roleRank: Record<ElementRole, number> = {
-        hero: 1,
-        primary: 2,
-        action: 3,
+        branding: 1,
+        hero: 2,
+        primary: 3,
         secondary: 4,
-        branding: 5,
+        action: 5,
       };
       return roleRank[a.role] - roleRank[b.role];
     });
@@ -513,10 +554,11 @@ function buildCandidateLayout(
 
     if (numItems > 1) {
       const leftoverSpace = availableHeight - totalMeasuredHeight;
-      gap = Math.max(0, Math.min(12, Math.floor(leftoverSpace / (numItems - 1))));
+      gap = Math.max(4, Math.min(24, Math.floor(leftoverSpace / (numItems + 1))));
     }
 
-    let currentY = contentY;
+    const totalBlockHeight = totalMeasuredHeight + (numItems > 1 ? (numItems - 1) * gap : 0);
+    let currentY = contentY + Math.max(0, Math.round((availableHeight - totalBlockHeight) / 2));
     resolvedElements = [];
 
     for (const item of measuredItems) {
@@ -940,6 +982,7 @@ export function resolveWithDiagnostics(
       overlaps: finalValidation.overlaps.length,
       clipping: finalValidation.clipped.length,
       durationMs,
+      violations: finalValidation.hardViolations,
     },
   };
 

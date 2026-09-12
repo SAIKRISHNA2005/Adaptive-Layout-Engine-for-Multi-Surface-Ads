@@ -95,7 +95,7 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
 
   const spacePressurePct =
     availableContentArea > 0 ? Math.round((totalPreferredArea / availableContentArea) * 100) : 0;
-  const isStressTest = surface.id === "stressTest" || spacePressurePct > 100;
+  const isStressTest = spacePressurePct > 100 || layout.elements.some((e) => e.status === "dropped");
 
   const effectiveMinTap = surface.accessibility?.minTapTarget ?? surface.minTapTarget;
   const minContrastRatio = surface.accessibility?.minContrastRatio;
