@@ -13,6 +13,7 @@ import {
 import { defaultTextMeasurer, type TextMeasurer } from "../measurement/text-measurer";
 import { computeClipping, computeOverlap } from "./scoring";
 import { validateLayout } from "./validation";
+import { DiagnosticsCollector, type ResolutionDiagnostics } from "./diagnostics";
 
 /** Options to configure the constraint resolver execution. */
 export interface ResolveOptions {
@@ -122,7 +123,8 @@ function measureState(
     }
 
     case "image": {
-      const aspectRatio = elem.type === "image" && elem.aspectRatio ? elem.aspectRatio : elem.role === "hero" ? 1.5 : 1.0;
+      const aspectRatio =
+        elem.type === "image" && elem.aspectRatio ? elem.aspectRatio : elem.role === "hero" ? 1.5 : 1.0;
 
       let baseWidth: number;
       let baseHeight: number;
@@ -150,7 +152,7 @@ function measureState(
     case "button": {
       const minTap = Math.max(
         surface.minTapTarget ?? 0,
-        (elem.type === "button" && elem.minTapTarget ? elem.minTapTarget : 0),
+        elem.type === "button" && elem.minTapTarget ? elem.minTapTarget : 0,
         surface.touchOnly ? 44 : 36,
       );
 
@@ -305,37 +307,41 @@ function buildCandidateLayout(
 
 /**
  * Applies a single atomic degradation step to an element state according to its role and type ladder.
- * Returns true if a degradation step was applied, or false if the element's ladder is fully exhausted.
+ * Returns the descriptive decision string if degraded, or null if the element's ladder is fully exhausted.
  */
-function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): boolean {
+function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): string | null {
   state.ladderStep++;
 
   // 1. Droppable / Branding role elements: shrink -> reposition -> drop
   const isDroppable =
     state.original.canDrop === true ||
-    (state.original.canDrop !== false && (state.role === "branding" || state.role === "secondary" || state.priority >= 3));
+    (state.original.canDrop !== false &&
+      (state.role === "branding" || state.role === "secondary" || state.priority >= 3));
 
   if (state.role === "branding" || (state.priority >= 3 && isDroppable)) {
     if (state.ladderStep === 1) {
       if (state.scale > 0.6 && state.original.canShrink !== false) {
         state.scale = 0.6;
         state.status = "shrunk";
-        state.decisions.push(`Shrunk branding/secondary element to 60% scale.`);
-        return true;
+        const decision = `Shrunk branding/secondary element to 60% scale.`;
+        state.decisions.push(decision);
+        return decision;
       }
     } else if (state.ladderStep === 2) {
       if (!state.isRepositioned) {
         state.isRepositioned = true;
         state.status = "repositioned";
-        state.decisions.push(`Repositioned to compact peripheral zone.`);
-        return true;
+        const decision = `Repositioned to compact peripheral zone.`;
+        state.decisions.push(decision);
+        return decision;
       }
     } else if (state.ladderStep >= 3) {
       if (isDroppable && state.visible) {
         state.visible = false;
         state.status = "dropped";
-        state.decisions.push(`Dropped: priority ${state.priority}, canDrop=true, insufficient space remaining.`);
-        return true;
+        const decision = `Dropped: priority ${state.priority}, canDrop=true, insufficient space remaining.`;
+        state.decisions.push(decision);
+        return decision;
       }
     }
   }
@@ -343,7 +349,8 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): bo
   // Non-droppable element explicitly marked canDrop=false
   if (state.original.canDrop === false && state.ladderStep >= 3) {
     if (!state.decisions.some((d) => d.includes("canDrop=false"))) {
-      state.decisions.push(`Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`);
+      const decision = `Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`;
+      state.decisions.push(decision);
     }
   }
 
@@ -354,8 +361,9 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): bo
       const oldFont = state.fontSize;
       state.fontSize = stepDown;
       state.status = "shrunk";
-      state.decisions.push(`Reduced font size ${oldFont}px -> ${stepDown}px to fit available height.`);
-      return true;
+      const decision = `Reduced font size ${oldFont}px -> ${stepDown}px to fit available height.`;
+      state.decisions.push(decision);
+      return decision;
     }
 
     if (!state.isTruncated && state.original.canTruncate !== false && state.displayText.length > 12) {
@@ -363,8 +371,9 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): bo
       state.displayText = state.displayText.slice(0, truncateLength).trim() + "...";
       state.isTruncated = true;
       state.status = "truncated";
-      state.decisions.push(`Truncated text copy with ellipsis to fit safe boundary.`);
-      return true;
+      const decision = `Truncated text copy with ellipsis to fit safe boundary.`;
+      state.decisions.push(decision);
+      return decision;
     }
   }
 
@@ -373,8 +382,9 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): bo
     if (state.original.canShrink !== false && state.scale > 0.5) {
       state.scale = Math.max(0.4, state.scale - 0.25);
       state.status = "shrunk";
-      state.decisions.push(`Scaled image dimensions to ${Math.round(state.scale * 100)}% to fit available space.`);
-      return true;
+      const decision = `Scaled image dimensions to ${Math.round(state.scale * 100)}% to fit available space.`;
+      state.decisions.push(decision);
+      return decision;
     }
   }
 
@@ -383,26 +393,174 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): bo
     if (state.original.canShrink !== false && state.scale > 0.5) {
       state.scale = 0.5;
       state.status = "shrunk";
-      state.decisions.push(
-        `Reduced button internal padding to fit available space while maintaining minTapTarget (${surface.minTapTarget ?? 44}px).`,
-      );
-      return true;
+      const decision = `Reduced button internal padding to fit available space while maintaining minTapTarget (${surface.minTapTarget ?? 44}px).`;
+      state.decisions.push(decision);
+      return decision;
     }
   }
 
   // Final check for non-droppable non-shrinkable elements
   if (state.original.canDrop === false || state.original.canShrink === false) {
     if (!state.decisions.some((d) => d.includes("canDrop=false"))) {
-      state.decisions.push(`Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`);
+      const decision = `Cannot drop element (canDrop=false); remaining at minimum size despite constraint pressure.`;
+      state.decisions.push(decision);
     }
   }
 
-  return false;
+  return null;
+}
+
+/**
+ * Resolves a declarative AdSpec against a SurfaceProfile, returning both the ResolvedLayout and detailed diagnostics.
+ *
+ * @param spec - The declarative ad specification to lay out.
+ * @param surface - Target surface profile with physical bounds and constraints.
+ * @param options - Resolution options including custom text measurement engine.
+ * @returns Object containing the ResolvedLayout and structured ResolutionDiagnostics report.
+ */
+export function resolveWithDiagnostics(
+  spec: AdSpec,
+  surface: SurfaceProfile,
+  options?: ResolveOptions,
+): { layout: ResolvedLayout; diagnostics: ResolutionDiagnostics } {
+  const startTime = performance.now();
+  const measurer = options?.textMeasurer ?? defaultTextMeasurer;
+  const diagnostics = new DiagnosticsCollector();
+
+  // 1. Normalize stage
+  const safeArea = surface.safeArea ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const availableWidth = Math.max(1, surface.width - (safeArea.left + safeArea.right));
+  const availableHeight = Math.max(1, surface.height - (safeArea.top + safeArea.bottom));
+
+  diagnostics.record(
+    "normalize",
+    `Normalized surface bounds: ${surface.width}x${surface.height}px with safeArea insets [top:${safeArea.top}, right:${safeArea.right}, bottom:${safeArea.bottom}, left:${safeArea.left}]. Active content area: ${availableWidth}x${availableHeight}px.`,
+  );
+  diagnostics.record(
+    "normalize",
+    `Input AdSpec validated: ${spec.elements.length} elements sorted into priority hierarchy.`,
+  );
+
+  // 2. Measure stage
+  const workingStates = initializeWorkingStates(spec, surface);
+
+  for (const st of workingStates) {
+    const measured = measureState(st, surface, availableWidth, availableHeight, measurer);
+    diagnostics.record(
+      "measure",
+      `Measured ${st.type} element '${st.id}' (role: ${st.role}, priority: ${st.priority}): ${measured.width}x${measured.height}px${measured.fontSize ? `, fontSize: ${measured.fontSize}px` : ""}.`,
+      st.id,
+    );
+  }
+
+  // 3. Initial placement pass
+  let currentLayout = buildCandidateLayout(workingStates, surface, measurer);
+  const activeCount = workingStates.filter((s) => s.visible).length;
+  diagnostics.record(
+    "place",
+    `Initial spatial placement pass: positioned ${activeCount}/${spec.elements.length} elements in vertical stack layout.`,
+  );
+
+  let validation = validateLayout(currentLayout, surface, spec);
+  diagnostics.record(
+    "validate",
+    `Layout validation: ${validation.isValid ? "All hard constraints satisfied." : `${validation.hardViolations.length} constraint violations detected.`}`,
+  );
+
+  // 4. Priority-ordered degradation loop if constraint violations exist
+  if (!validation.isValid) {
+    const roleDegradationRank: Record<ElementRole, number> = {
+      branding: 1,
+      secondary: 2,
+      action: 3,
+      primary: 4,
+      hero: 5,
+    };
+
+    const degradationQueue = [...workingStates].sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+      }
+      return roleDegradationRank[a.role] - roleDegradationRank[b.role];
+    });
+
+    const maxIterations = 60;
+    let iterations = 0;
+
+    for (const targetState of degradationQueue) {
+      if (validation.isValid || iterations >= maxIterations) {
+        break;
+      }
+
+      let canDegradeFurther = true;
+      while (canDegradeFurther && !validation.isValid && iterations < maxIterations) {
+        iterations++;
+        const decisionText = degradeElement(targetState, surface);
+
+        if (decisionText) {
+          diagnostics.record(
+            "degrade",
+            `Degraded element '${targetState.id}': ${decisionText}`,
+            targetState.id,
+          );
+          currentLayout = buildCandidateLayout(workingStates, surface, measurer);
+          validation = validateLayout(currentLayout, surface, spec);
+          diagnostics.record(
+            "validate",
+            `Post-degradation check: ${validation.isValid ? "Resolved! All constraints satisfied." : `${validation.hardViolations.length} violations remaining.`}`,
+          );
+        } else {
+          canDegradeFurther = false;
+        }
+      }
+    }
+  }
+
+  // Re-build layout with final state decisions
+  currentLayout = buildCandidateLayout(workingStates, surface, measurer);
+
+  const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+  const finalValidation = validateLayout(currentLayout, surface, spec);
+
+  const finalLayout: ResolvedLayout = {
+    ...currentLayout,
+    metrics: {
+      ...currentLayout.metrics,
+      durationMs,
+      hardViolations: finalValidation.hardViolations.length,
+      overlapCount: finalValidation.overlaps.length,
+      clippingCount: finalValidation.clipped.length,
+    },
+  };
+
+  const totalHardConstraints = 4;
+  let hardViolationsCount = 0;
+  if (finalValidation.overlaps.length > 0) hardViolationsCount++;
+  if (finalValidation.clipped.length > 0) hardViolationsCount++;
+  if (finalValidation.tapTargetViolations.length > 0) hardViolationsCount++;
+  if (finalValidation.textSizeViolations.length > 0) hardViolationsCount++;
+
+  const diagnosticsReport: ResolutionDiagnostics = {
+    trace: diagnostics.getTrace(),
+    summary: {
+      elementsResolved: finalLayout.elements.filter((el) => el.visible).length,
+      elementsTotal: spec.elements.length,
+      hardConstraintsSatisfied: Math.max(0, totalHardConstraints - hardViolationsCount),
+      hardConstraintsTotal: totalHardConstraints,
+      overlaps: finalValidation.overlaps.length,
+      clipping: finalValidation.clipped.length,
+      durationMs,
+    },
+  };
+
+  return {
+    layout: finalLayout,
+    diagnostics: diagnosticsReport,
+  };
 }
 
 /**
  * Resolves a declarative AdSpec against a target SurfaceProfile to produce a concrete ResolvedLayout.
- * Orchestrates multi-pass measurement, placement, validation, and priority-ordered degradation.
  *
  * @param spec - The declarative ad specification to lay out.
  * @param surface - Target surface profile with physical bounds and constraints.
@@ -414,81 +572,7 @@ export function resolve(
   surface: SurfaceProfile,
   options?: ResolveOptions,
 ): ResolvedLayout {
-  const startTime = performance.now();
-  const measurer = options?.textMeasurer ?? defaultTextMeasurer;
-
-  // 1. Initialize working states
-  const workingStates = initializeWorkingStates(spec, surface);
-
-  // 2. Initial placement pass
-  let currentLayout = buildCandidateLayout(workingStates, surface, measurer);
-  let validation = validateLayout(currentLayout, surface, spec);
-
-  // If initial placement is fully valid, return immediately
-  if (validation.isValid) {
-    const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
-    return {
-      ...currentLayout,
-      metrics: {
-        ...currentLayout.metrics,
-        durationMs,
-        hardViolations: 0,
-        overlapCount: 0,
-        clippingCount: 0,
-      },
-    };
-  }
-
-  // 3. Degradation loop in strict REVERSE priority order:
-  // Exhaust all steps of lowest priority elements before touching higher priority elements.
-  const roleDegradationRank: Record<ElementRole, number> = {
-    branding: 1,
-    secondary: 2,
-    action: 3,
-    primary: 4,
-    hero: 5,
-  };
-
-  const degradationQueue = [...workingStates].sort((a, b) => {
-    if (a.priority !== b.priority) {
-      return b.priority - a.priority; // Highest numeric priority (lowest importance) first
-    }
-    return roleDegradationRank[a.role] - roleDegradationRank[b.role];
-  });
-
-  const maxIterations = 60;
-  let iterations = 0;
-
-  for (const targetState of degradationQueue) {
-    if (validation.isValid || iterations >= maxIterations) {
-      break;
-    }
-
-    // Repeatedly degrade this single element through its ladder until it is exhausted
-    // or until the whole layout becomes valid!
-    let canDegradeFurther = true;
-    while (canDegradeFurther && !validation.isValid && iterations < maxIterations) {
-      iterations++;
-      canDegradeFurther = degradeElement(targetState, surface);
-
-      currentLayout = buildCandidateLayout(workingStates, surface, measurer);
-      validation = validateLayout(currentLayout, surface, spec);
-    }
-  }
-
-  const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
-  const finalValidation = validateLayout(currentLayout, surface, spec);
-
-  return {
-    ...currentLayout,
-    metrics: {
-      ...currentLayout.metrics,
-      durationMs,
-      hardViolations: finalValidation.hardViolations.length,
-      overlapCount: finalValidation.overlaps.length,
-      clippingCount: finalValidation.clipped.length,
-    },
-  };
+  return resolveWithDiagnostics(spec, surface, options).layout;
 }
 
 /** Alias for resolve() matching layout engine naming convention. */

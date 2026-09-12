@@ -4,5 +4,6 @@ export * from "./core/spec";
 export * from "./core/surfaces";
 export * from "./core/validation";
 export * from "./core/scoring";
+export * from "./core/diagnostics";
 export * from "./core/resolver";
 export * from "./measurement/text-measurer";
