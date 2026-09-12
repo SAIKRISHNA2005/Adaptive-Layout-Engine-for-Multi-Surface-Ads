@@ -1,13 +1,79 @@
 # Architecture Decision Records (ADR)
 
-## ADR-001: Separation of Core Resolver from Rendering Backends
-- **Status**: Accepted
-- **Context**: The engine needs to support DOM, Canvas, and potentially unknown future renderers.
-- **Decision**: All resolution logic lives in `src/core/` and outputs a normalized `ResolvedLayout` representation with explicit `(x, y, width, height, scale, visible, typography)` properties per element.
-- **Consequences**: Enables 100% headless testing with Vitest and straightforward implementation of multiple renderers.
+This log documents foundational architectural decisions for the Adaptive Layout Engine for Multi-Surface Ads, detailing context, decisions, trade-offs, and alternatives considered.
 
-## ADR-002: Multi-Stage Priority Degradation Model
+---
+
+## ADR-001: Priority-Ordered Greedy Resolver vs. General Linear Programming Solver
+
 - **Status**: Accepted
-- **Context**: Shrinking surfaces cannot satisfy all elements without clipping or overlapping.
-- **Decision**: Elements undergo discrete degradation tiers (e.g. `Full` -> `Compact` -> `Minimal/Icon` -> `Dropped`) ordered inversely by priority before higher-priority elements are affected.
-- **Consequences**: Deterministic, zero-overlap degradation behavior even on extremely constrained surfaces.
+- **Context**: 
+  The engine must map declarative ad elements onto arbitrary surface geometries while satisfying geometric constraints (zero overlap, containment), hardware constraints (safe areas, tap targets), and ergonomic constraints (viewing distance, legibility). The resolution must execute in sub-millisecond time (<10ms), support deterministic headless testing, and provide explainable step-by-step diagnostic traces.
+- **Decision**: 
+  Implement a priority-ordered greedy topological resolver paired with progressive, multi-pass degradation ladders rather than a general-purpose Linear Programming (LP) or Simplex solver (such as Cassowary).
+- **Alternatives Considered**:
+  1. *General LP / Simplex Solver (e.g., Cassowary)*:
+     - *Pros*: Solves arbitrary systems of linear equality and inequality constraints.
+     - *Cons*: Continuous solvers struggle with discrete disjunctions (e.g., Element A must be placed *either* above *or* beside Element B), discrete state transitions (dropping an element entirely, truncating copy to keyword, switching font size tiers), and non-linear text line-wrapping boundaries. LP solvers are computationally heavy, prone to solver failure or high latency on pathological inputs, and act as opaque black boxes that make generating human-readable explainability traces difficult.
+  2. *Priority-Ordered Greedy Topological Resolver (Chosen)*:
+     - *Pros*: Deterministic, $O(N \log N)$ computational complexity, sub-millisecond execution (<2ms), zero external dependencies, and inherently explainable. Macro-archetypes (`TallStack`, `HorizontalSplit`, `UltraWideRibbon`, `BalancedGrid`) partition spatial topology, while element priority ladders strictly dictate space allocation and degradation sequence.
+     - *Cons*: Does not search all possible 2D packing permutations, but generates predictable, aesthetically sound layouts aligned with graphic design hierarchy.
+
+---
+
+## ADR-002: Strict Binary Classification of Hard vs. Soft Constraints
+
+- **Status**: Accepted
+- **Context**: 
+  Display surfaces present both non-negotiable physical constraints (e.g., canvas boundaries, hardware notches, minimum touch target sizes) and design preferences (e.g., preferred aspect ratio, optimal margins, whitespace distribution).
+- **Decision**: 
+  Enforce a strict binary separation between Hard Constraints and Soft Constraints:
+  - **Hard Constraints (Invariants)**: Non-negotiable physical laws. Any layout candidate violating a hard constraint (boundary clipping, element overlap, tap target $< \text{minTapTarget}$, font size $< \text{minTextSize}$) is invalid ($\text{Score} = -\infty$) and triggers immediate degradation or candidate rejection.
+  - **Soft Constraints (Preferences)**: Evaluated via a multi-objective scoring function ($[0, 100]$ score) incorporating visibility weight, degradation penalties, visual balance, and whitespace economy to rank valid candidates.
+- **Alternatives Considered**:
+  - *Unified Soft Penalty Model (Penalty Minimization)*:
+    - *Cons*: Treating all constraints as soft weights in an optimization equation risks "satisficing" violations—an optimizer might accept a 4px button overlap or boundary clip if the overall whitespace score is sufficiently high. In advertising and UI systems, boundary clipping and element overlaps are catastrophic failures that must never be traded off against aesthetic preferences.
+
+---
+
+## ADR-003: Renderer-Independent Functional Core
+
+- **Status**: Accepted
+- **Context**: 
+  The engine must support diverse presentation layers: modern interactive DOM, HTML5 Canvas 2D, and potential future targets (WebGL, server-side pre-rendered SVG/PNG, digital out-of-home signage displays).
+- **Decision**: 
+  The core resolver (`src/core/`) is a 100% pure TypeScript module that has zero dependencies on browser APIs, the DOM, React, or Canvas. It takes a declarative `AdSpec` and a `SurfaceProfile` and returns an immutable `ResolvedLayout` Intermediate Representation (IR). Renderers (`render-dom.tsx`, `render-canvas.ts`) are decoupled, pure visual projection layers that consume the IR.
+- **Alternatives Considered**:
+  - *DOM-Coupled Layout (CSS Flexbox / Grid inside React components)*:
+    - *Cons*: Couples layout calculation to browser layout passes (`getBoundingClientRect`), prevents running headless Vitest test suites in Node environments, eliminates Canvas or server-side rendering, and makes testing non-deterministic due to browser rendering engine differences.
+
+---
+
+## ADR-004: Decoupling Surface Resolution from CSS Media Queries
+
+- **Status**: Accepted
+- **Context**: 
+  Responsive web design traditionally relies on CSS `@media` queries to alter layouts based on browser window dimensions.
+- **Decision**: 
+  Target ad surfaces are treated as virtualized physical displays defined by semantic `SurfaceProfile` specifications (`width`, `height`, `safeArea`, `minTapTarget`, `minTextSize`, `viewingDistance`), entirely independent of the browser window embedding them. Layout decisions are computed mathematically by the resolver. CSS media queries are restricted solely to the peripheral studio chrome (e.g., switching between 3-column desktop view and tabbed mobile studio view).
+- **Alternatives Considered**:
+  - *CSS Media Query-Driven Ad Layouts*:
+    - *Cons*: CSS media queries only inspect the parent viewport, not the embedded ad frame or physical display characteristics. CSS cannot reason about semantic element priorities, cannot dynamically drop lower-priority elements when copy expands, and cannot enforce viewing-distance text legibility across varying display formats.
+
+---
+
+## ADR-005: TextMeasurer Strategy Pattern (DOM, Canvas, and Estimate Heuristic)
+
+- **Status**: Accepted
+- **Context**: 
+  Accurate layout resolution requires measuring text bounding boxes at various font sizes and maximum widths to calculate line wrapping and vertical height. However, text measurement engines differ between environments (browser main thread, Web Workers, Node.js test runners).
+- **Decision**: 
+  Abstract text measurement behind a pluggable `TextMeasurer` interface (`measureText({ text, fontSize, fontWeight, maxWidth })`). Provide three interchangeable implementations:
+  1. `DOMTextMeasurer`: Uses an offscreen, cached HTML element for pixel-perfect browser DOM layout.
+  2. `CanvasTextMeasurer`: Uses `OffscreenCanvas` / Canvas 2D `ctx.measureText` for high-throughput headless or canvas environments.
+  3. `EstimateTextMeasurer`: A deterministic mathematical heuristic based on typographic character aspect ratios and line-height coefficients, operating with zero external dependencies in headless Node environments.
+- **Alternatives Considered**:
+  - *Relying Exclusively on Canvas `measureText`*:
+    - *Cons*: Fails in Node.js environments without installing heavy native C++ binary dependencies (`node-canvas`), breaking zero-setup CI workflows.
+  - *Relying Exclusively on DOM*:
+    - *Cons*: Incompatible with headless Node/Vitest without mock DOM environments, and unusable inside Web Workers or pure Canvas pipelines.

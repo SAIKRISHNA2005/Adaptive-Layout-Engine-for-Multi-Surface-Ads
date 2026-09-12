@@ -4,40 +4,44 @@
 
 The Adaptive Layout Engine models multi-surface ad layout as a deterministic, constraint-guided geometric pipeline. It takes an abstract, surface-agnostic description of ad content and a physical surface specification, and generates a concrete coordinate mapping that can be consumed by any rendering backend.
 
-```text
-┌─────────────────────────┐     ┌──────────────────────────────┐
-│  AdSpec                 │     │  SurfaceProfile              │
-│  - Elements & Roles     │     │  - Physical Dimensions (W,H) │
-│  - Priorities (1..N)    │     │  - Safe Area Insets          │
-│  - Raw Content Payloads │     │  - Hardware Constraints      │
-└────────────┬────────────┘     └──────────────┬───────────────┘
-             │                                 │
-             └───────────────┬─────────────────┘
-                             │
-                             ▼
-              ┌─────────────────────────────┐
-              │  Constraint Resolver Engine │
-              │  (100% Pure TypeScript)     │
-              │  - Spatial Partitioning     │
-              │  - Priority Degradation     │
-              │  - Candidate Evaluation     │
-              └──────────────┬──────────────┘
-                             │
-                             ▼
-              ┌─────────────────────────────┐
-              │  ResolvedLayout (IR)        │
-              │  - Element Coordinates (x,y)│
-              │  - Dimensions (w,h) & Scales│
-              │  - Visibility & Truncation  │
-              │  - Diagnostic Trace Logs    │
-              └───────┬─────────────┬───────┘
-                      │             │
-        ┌─────────────┴──┐       ┌──┴────────────┐
-        ▼                ▼       ▼               ▼
- ┌──────────────┐ ┌────────────┐ ┌──────────────┐ ┌─────────────┐
- │ React / DOM  │ │ Canvas 2D  │ │ Headless SVG │ │ Future Live │
- │ Renderer     │ │ Renderer   │ │ Exporter     │ │ Preview     │
- └──────────────┘ └────────────┘ └──────────────┘ └─────────────┘
+```mermaid
+flowchart TD
+    subgraph Inputs ["1. Declarative Specifications"]
+        A["<b>AdSpec</b><br/>• Semantic Elements & Roles<br/>• Priorities (1..N)<br/>• Text Copy, Image URLs, Buttons"]
+        B["<b>SurfaceProfile</b><br/>• Dimensions (Width × Height)<br/>• Safe Area Insets (Notch, TV Safe)<br/>• Hardware Constraints (Tap, Text, Distance)"]
+    end
+
+    subgraph Core ["2. Constraint Resolver Engine (Pure TypeScript)"]
+        C["<b>Macro-Archetype Classifier & Normalizer</b><br/>Aspect-ratio-driven spatial zone allocation"]
+        D["<b>Priority Degradation & Repair</b><br/>Multi-pass constraint satisfaction loop"]
+        C --> D
+    end
+
+    subgraph Output ["3. Intermediate Representation (IR)"]
+        E["<b>ResolvedLayout</b><br/>• Normalized coordinates (x, y, w, h)<br/>• Typography scale & line wrapping<br/>• Diagnostic explainability trace"]
+    end
+
+    subgraph Consumers ["4. Rendering Consumers"]
+        F["<b>React / DOM Renderer</b><br/>Interactive DOM elements & CSS styles"]
+        G["<b>Canvas 2D Renderer</b><br/>Rasterized HTML5 Canvas graphics"]
+        H["<b>Headless SVG / SSR Exporter</b><br/>Vector output & automated validation"]
+    end
+
+    Inputs --> C
+    D --> E
+    E --> F
+    E --> G
+    E --> H
+
+    classDef inStyle fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef coreStyle fill:#0f172a,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef irStyle fill:#1e1e38,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
+    classDef renderStyle fill:#182234,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+
+    class A,B inStyle;
+    class C,D coreStyle;
+    class E irStyle;
+    class F,G,H renderStyle;
 ```
 
 ### Why the Resolver Must Be 100% Framework-Agnostic
@@ -49,59 +53,57 @@ The Adaptive Layout Engine models multi-surface ad layout as a deterministic, co
 
 ## 2. Resolver Internal Pipeline Stages
 
-The layout engine executes an 8-stage pipeline to resolve constraints systematically and explainably:
+The layout engine executes a deterministic 5-stage pipeline to resolve constraints systematically and explainably:
 
-```text
-┌───────────┐    ┌─────────┐    ┌────────────┐    ┌──────────┐
-│ Normalize ├───►│ Measure ├───►│ Candidates ├───►│ Place by │
-│           │    │         │    │ Generation │    │ Priority │
-└───────────┘    └─────────┘    └────────────┘    └────┬─────┘
-                                                       │
-┌─────────────┐    ┌──────────┐    ┌───────────┐       │
-│ Diagnostics │◄───┤ Degrade/ │◄───┤ Validate/ │◄──────┘
-│ & Telemetry │    │ Repair   │    │ Score     │
-└─────────────┘    └──────────┘    └───────────┘
+```mermaid
+flowchart LR
+    S1["<b>1. Normalize</b><br/>Zod schema validation<br/>Safe area subtraction<br/>Archetype selection"]
+    S2["<b>2. Measure</b><br/>Text line wrapping<br/>Hero aspect ratio<br/>Tap target bounds"]
+    S3["<b>3. Place</b><br/>Topological zones<br/>Priority placement<br/>Coordinate mapping"]
+    S4["<b>4. Validate & Score</b><br/>Hard invariants check<br/>Aesthetic balance<br/>Multi-objective score"]
+    S5["<b>5. Degrade / Repair</b><br/>Pass 1: Shrink<br/>Pass 2: Truncate<br/>Pass 3: Drop"]
+
+    S1 --> S2 --> S3 --> S4 --> S5
+
+    classDef stage fill:#0f172a,stroke:#6366f1,stroke-width:2px,color:#f8fafc;
+    class S1,S2,S3,S4,S5 stage;
 ```
 
 ### 1. Normalize (`normalize`)
-- **Responsibility**: Validates input `AdSpec` and `SurfaceProfile` against runtime Zod schemas. Computes effective canvas bounds after subtracting hardware/platform `safeArea` insets. Sorts elements into canonical order by declared `priority` (1 = highest, N = lowest) and breaks ties deterministically by element role (`hero` > `primary` > `action` > `secondary` > `branding`).
+- **Responsibility**: Validates input `AdSpec` and `SurfaceProfile` against runtime Zod schemas. Computes effective canvas bounds after subtracting hardware/platform `safeArea` insets. Derives the geometric macro-archetype from aspect ratio ($\text{AR} = \frac{W}{H}$) and establishes the working coordinate space.
 - **Inputs**: Raw `AdSpec`, Raw `SurfaceProfile`.
-- **Outputs**: Sanitized `NormalizedSpec`, `ActiveWorkingArea` bounding box, and `PriorityQueue`.
+- **Outputs**: Sanitized `NormalizedSpec`, `ActiveWorkingArea` bounding box, and classified `LayoutArchetype`.
 
 ### 2. Measure (`measure`)
-- **Responsibility**: Computes intrinsic, minimum, and ideal dimensions for each element. For text, it runs font-size-to-glyph metrics to compute multi-line wrapping boundaries at candidate font sizes. For images, it preserves aspect ratios and calculates minimum readable bounding boxes. For buttons, it ensures dimensions meet or exceed surface `minTapTarget`.
-- **Inputs**: `NormalizedSpec`, `SurfaceProfile`, `MeasurementEngine` (Canvas/DOM or pure font metric table).
-- **Outputs**: Map of `ElementId -> ElementMeasurement` (intrinsic width/height, min bounding box, line wrapping thresholds).
+- **Responsibility**: Computes intrinsic, minimum, and ideal dimensions for each element via the pluggable `TextMeasurer` abstraction (`DOMTextMeasurer`, `CanvasTextMeasurer`, or `EstimateTextMeasurer`). Computes multi-line text wrapping thresholds, image aspect ratios, and button tap-target hit boxes.
+- **Inputs**: `NormalizedSpec`, `SurfaceProfile`, `TextMeasurer`.
+- **Outputs**: Map of `ElementId -> ElementMeasurement` (intrinsic dimensions, line wrapping boundaries, tap target bounds).
 
-### 3. Generate Candidates (`generate candidates`)
-- **Responsibility**: Inspects surface topology (aspect ratio $\text{AR} = \frac{W}{H}$, viewing distance, available area) and generates macro-structural layout archetypes (e.g. `VerticalStack`, `HorizontalSplit`, `BannerSidebarRow`, `HeroCentricGrid`). Each archetype defines relative spatial zones for primary content, media, and actions.
-- **Inputs**: `ActiveWorkingArea`, Aspect Ratio category (`tall`, `wide`, `square`, `extreme-wide`), `ElementMeasurement` map.
-- **Outputs**: Ordered list of `CandidateArchetype` strategies to test against constraints.
-
-### 4. Place by Priority (`place by priority`)
-- **Responsibility**: Within a selected macro-archetype, allocates spatial boxes greedily starting with Priority 1 elements (Hero Image, Headline), followed by Priority 2 (Action/CTA, Price), and finally Priority 3 (Branding Logo). Elements are placed in their preferred topological zones without overlapping previously committed higher-priority bounding boxes.
-- **Inputs**: `CandidateArchetype`, `PriorityQueue`, `ElementMeasurement` map.
+### 3. Place (`place`)
+- **Responsibility**: Positions elements within the selected macro-archetype topology:
+  - `TallStack` ($\text{AR} < 0.85$, e.g., Mobile Portrait): Single-column centered vertical stack.
+  - `BalancedGrid` ($0.85 \le \text{AR} \le 1.35$, e.g., Retail Kiosk): Media top, headline/content middle, actions bottom with balanced padding.
+  - `HorizontalSplit` ($1.35 < \text{AR} \le 3.5$, e.g., Mobile Landscape): 2-column layout (hero media left, copy and actions right).
+  - `UltraWideRibbon` ($\text{AR} > 3.5$, e.g., Broadcast Lower-Third): Single horizontal row partitioned into branding, hero media, copy block, and trailing CTA.
+- **Inputs**: `LayoutArchetype`, `ElementMeasurement` map, `ActiveWorkingArea`.
 - **Outputs**: Tentative `SpatialPlacementMap` containing un-validated `(x, y, w, h)` bounding boxes for all active elements.
 
-### 5. Validate & Score (`validate & score`)
-- **Responsibility**: Evaluates the tentative placement against all hard constraints (boundary containment, zero overlap between any pair of elements, minimum tap targets, minimum font sizes). Computes a multi-objective fitness score considering content utilization, visual hierarchy preservation, alignment penalties, and whitespace balance.
+### 4. Validate & Score (`validate`)
+- **Responsibility**: Evaluates the tentative placement against all hard constraints (boundary containment, pairwise non-overlap, minimum tap targets, minimum font sizes). Computes a multi-objective fitness score considering content utilization, visual hierarchy preservation, and whitespace balance.
 - **Inputs**: Tentative `SpatialPlacementMap`, `SurfaceProfile`, Hard/Soft constraint definitions.
-- **Outputs**: `ValidationResult` (boolean valid, list of violation tokens) and `CandidateScore` (numerical penalty & aesthetic metric).
+- **Outputs**: `ValidationResult` (boolean valid, list of violation tokens) and `CandidateScore` (numerical fitness metric).
 
-### 6. Degrade / Repair (`degrade / repair`)
-- **Responsibility**: If hard constraint validation fails or spatial starvation occurs (content overflows the surface), this stage executes targeted, element-specific degradation steps on the lowest available priority items. It repeatedly applies discrete degradation tiers (shrink font $\to$ wrap text $\to$ crop image $\to$ drop branding) until all hard constraints are satisfied or only the minimum irreducible core remains.
-- **Inputs**: Failing `SpatialPlacementMap`, list of constraint violations, `PriorityQueue`.
-- **Outputs**: Repaired `SpatialPlacementMap` with guaranteed zero overlaps and updated visibility/truncation states.
+### 5. Degrade / Repair (`degrade`)
+- **Responsibility**: If hard constraint validation fails or spatial starvation occurs, executes targeted degradation passes in strict priority order (lowest priority $P_N$ to highest $P_1$):
+  - *Pass 1 (Non-destructive adjustments)*: Shrink padding, scale font size down towards `minTextSize`, scale hero image.
+  - *Pass 2 (Progressive keyword truncation)*: Compact text copy to essential keywords with ellipsis (`...`).
+  - *Pass 3 (Selective dropping)*: Drop lower-priority optional elements marked with `canDrop: true` (e.g. secondary copy, price tag, branding logo).
+  - *Pass 4 (Spatial starvation emergency containment)*: Non-action elements drop to protect the core CTA button from boundary clipping.
+- **Inputs**: Failing `SpatialPlacementMap`, list of constraint violations, priority queue.
+- **Outputs**: Repaired `SpatialPlacementMap` with guaranteed zero overlaps and zero clipping.
 
-### 7. Finalize IR (`finalize IR`)
-- **Responsibility**: Converts the repaired spatial map into the canonical, immutable `ResolvedLayout` intermediate representation. Calculates exact pixel coordinates, font size styles, text truncation ellipsis markers, button tap target paddings, and background frame coordinates.
-- **Inputs**: Repaired `SpatialPlacementMap`, `SurfaceProfile`.
-- **Outputs**: Typed `ResolvedLayout` ready for renderers.
-
-### 8. Diagnostics & Telemetry (`emit diagnostics`)
-- **Responsibility**: Constructs an explainability trace detailing every step taken during resolution: chosen macro-archetype, initial measurements, degradation steps applied with rationales, dropped elements, and final constraint verification audit.
-- **Inputs**: Pipeline execution logs and audit records.
-- **Outputs**: `ResolutionTrace` object attached to the `ResolvedLayout`.
+### Diagnostics & Telemetry
+Every stage records events to a `DiagnosticsCollector`, producing an explainable, step-by-step `ResolutionDiagnostics` audit report detailing decisions, duration, and constraint satisfaction.
 
 ---
 
@@ -109,33 +111,45 @@ The layout engine executes an 8-stage pipeline to resolve constraints systematic
 
 To achieve predictable adaptation without fragile heuristics, the engine strictly categorizes all constraints into two distinct tiers:
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ HARD CONSTRAINTS (Zero-Tolerance Violations — Must Satisfy 100%)       │
-│                                                                        │
-│ • Surface Bounding Box:   0 <= x <= x+w <= Surface.width               │
-│ • Safe Area Insets:       Placement strictly within Safe Margin        │
-│ • Pairwise Disjointness:  Intersection(ElemA, ElemB) == 0 (No Overlap) │
-│ • Min Tap Target:         Touch elements >= surface.minTapTarget (px)  │
-│ • Min Legible Text Size:  Font size >= surface.minTextSize (px)        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Unmet Hard Constraints trigger
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│ PRIORITY-ORDERED DEGRADATION                                           │
-│ • Downgrade lowest priority elements first (P3 Branding -> P2 Price)   │
-│ • Protect high priority elements (P1 Headline, P1 Hero, P2 CTA)        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Satisfied Hard Constraints evaluated by
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│ SOFT CONSTRAINTS / PREFERENCES (Scored Optimization Functions)         │
-│                                                                        │
-│ • Preferred Element Size & Natural Aspect Ratio                        │
-│ • Preferred Content Order & Visual Balance                             │
-│ • Whitespace Distribution & Margin Uniformity                          │
-│ • Reading Flow Alignment (Left-to-Right / Top-to-Bottom)               │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Hard ["HARD CONSTRAINTS (Zero-Tolerance Physical Invariants)"]
+        H1["<b>Surface Bounding Box</b>: 0 ≤ x ≤ x+w ≤ Surface.width"]
+        H2["<b>Safe Area Insets</b>: Placement strictly within safe margins"]
+        H3["<b>Pairwise Disjointness</b>: RectA ∩ RectB = ∅ (Zero Overlap)"]
+        H4["<b>Minimum Tap Target</b>: Touch target ≥ surface.minTapTarget"]
+        H5["<b>Minimum Legible Text</b>: Font size ≥ surface.minTextSize"]
+    end
+
+    subgraph Trigger ["Invariant Failure Trigger"]
+        T1{"Any Hard Constraint<br/>Violated?"}
+    end
+
+    subgraph Degradation ["PRIORITY-ORDERED DEGRADATION"]
+        D1["<b>Priority Ladder Cascade</b><br/>• Degrade lowest priority elements first (P3 Branding ➔ P2 Price)<br/>• Strictly protect high priority conversion elements (P1 Headline, P1 Hero, P2 CTA)"]
+    end
+
+    subgraph Soft ["SOFT CONSTRAINTS / PREFERENCES (Scored Optimization Functions)"]
+        S1["<b>Visual Balance & Centering</b>: Centroid alignment"]
+        S2["<b>Preferred Element Size</b>: Natural aspect ratios"]
+        S3["<b>Whitespace Distribution</b>: Balanced margins & padding"]
+        S4["<b>Reading Flow</b>: Natural visual hierarchy"]
+    end
+
+    Hard --> T1
+    T1 -- "Yes (Score = -∞)" --> D1
+    D1 --> Hard
+    T1 -- "No (100% Valid)" --> Soft
+
+    classDef hardStyle fill:#2d1515,stroke:#ef4444,stroke-width:2px,color:#f8fafc;
+    classDef degStyle fill:#2e1f0c,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef softStyle fill:#0f2419,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef trigStyle fill:#1e1e38,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+
+    class H1,H2,H3,H4,H5 hardStyle;
+    class T1 trigStyle;
+    class D1 degStyle;
+    class S1,S2,S3,S4 softStyle;
 ```
 
 ### Hard Constraints
@@ -156,13 +170,31 @@ $$\text{Score} = w_{\text{vis}} \cdot \text{VisibilityScore} - w_{\text{dist}} \
 
 When available screen area is insufficient to satisfy all elements at their ideal sizes, the engine degrades elements along deterministic, role-specific ladders ordered strictly from lowest priority ($P_N$) to highest priority ($P_1$).
 
-```text
-Element Type      Degradation Sequence (Progressive Steps)
-──────────────    ──────────────────────────────────────────────────────────────
-Text              [Ideal Size] ──► [Shrink Font to MinTextSize] ──► [Wrap to Max Lines] ──► [Truncate with Ellipsis]
-Image             [Ideal 1:1/16:9] ──► [Scale Down to MinHeroSize] ──► [Crop to Focused Aspect] ──► [Iconic Preview]
-Button / CTA      [Full Padding + Subtext] ──► [Compact Padding] ──► [Reposition] ──► [LOCK AT minTapTarget (NEVER DROP)]
-Branding Logo     [Full Wordmark] ──► [Compact Logo] ──► [Icon Mark] ──► [Reposition to Corner] ──► [DROP CLEANLY]
+```mermaid
+flowchart LR
+    subgraph Text ["Text Elements (Headline / Price)"]
+        T1["Ideal Size"] --> T2["Shrink Font to MinTextSize"] --> T3["Wrap to Max Lines"] --> T4["Truncate with Ellipsis"]
+    end
+
+    subgraph Image ["Image Elements (Hero Product)"]
+        I1["Ideal 16:9 / 1:1"] --> I2["Scale Down to MinHeroSize"] --> I3["Crop / Refocus Aspect"] --> I4["Iconic Preview"]
+    end
+
+    subgraph Button ["Action Button (CTA) - PROTECTED"]
+        B1["Full Padding + Subtext"] --> B2["Compact Padding"] --> B3["Reposition"] --> B4["LOCK AT minTapTarget<br/>(NEVER DROPPED)"]
+    end
+
+    subgraph Branding ["Branding Elements (Logo / Wordmark)"]
+        L1["Full Wordmark"] --> L2["Compact Logo"] --> L3["Icon Mark"] --> L4["DROP CLEANLY<br/>(First to be removed)"]
+    end
+
+    classDef step fill:#1e293b,stroke:#64748b,stroke-width:1px,color:#f8fafc;
+    classDef locked fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef dropped fill:#4c0519,stroke:#f43f5e,stroke-width:2px,color:#f8fafc;
+
+    class T1,T2,T3,T4,I1,I2,I3,I4,B1,B2,B3,L1,L2,L3 step;
+    class B4 locked;
+    class L4 dropped;
 ```
 
 ### Strict Protection Invariant: CTA vs. Branding
@@ -175,19 +207,44 @@ Branding Logo     [Full Wordmark] ──► [Compact Logo] ──► [Icon Mark]
 
 The system is decoupled through typed domain contracts:
 
-```text
- ┌──────────────────────┐         ┌───────────────────────────┐
- │  SurfaceProfile      │         │  ResolvedLayout           │
- │  (Contract)          │         │  (Immutable IR)           │
- └──────────┬───────────┘         └─────────────┬─────────────┘
-            │                                   │
-            ▼                                   ▼
- ┌──────────────────────┐         ┌───────────────────────────┐
- │ resolver.ts          │         │ render-dom.tsx            │
- │ resolveLayout(       │───────► │ render-canvas.ts          │
- │   spec: AdSpec,      │         │ [Any New Renderer]        │
- │   surface: Surface)  │         └───────────────────────────┘
- └──────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Contract ["Typed Domain Contract"]
+        SP["<b>SurfaceProfile</b><br/>• width, height<br/>• safeArea insets<br/>• minTapTarget, minTextSize<br/>• viewingDistance"]
+        AS["<b>AdSpec</b><br/>• elements, roles, priorities"]
+    end
+
+    subgraph Resolver ["Independent Pure Resolver (resolver.ts)"]
+        R["<b>resolveLayout(spec, surface, options?)</b><br/>Deterministic coordinate calculation<br/>Zero DOM or Canvas dependencies"]
+    end
+
+    subgraph IR ["Immutable Intermediate Representation"]
+        RL["<b>ResolvedLayout</b><br/>• surfaceId, dimensions<br/>• elements: [x, y, w, h, scale, visible]<br/>• trace: ResolutionDiagnostics"]
+    end
+
+    subgraph Renderers ["Decoupled Render Targets"]
+        R1["<b>React / DOM (render-dom.tsx)</b>"]
+        R2["<b>Canvas 2D (render-canvas.ts)</b>"]
+        R3["<b>WebGL / WebGPU Displays</b>"]
+        R4["<b>Headless SSR / Vector Exporters</b>"]
+    end
+
+    Contract --> R
+    R --> IR
+    IR --> R1
+    IR --> R2
+    IR --> R3
+    IR --> R4
+
+    classDef contractStyle fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef resolverStyle fill:#0f172a,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef irStyle fill:#1e1e38,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
+    classDef rendererStyle fill:#182234,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+
+    class SP,AS contractStyle;
+    class R resolverStyle;
+    class RL irStyle;
+    class R1,R2,R3,R4 rendererStyle;
 ```
 
 ### Adding a New Surface Profile (e.g. Ultra-Wide Billboard or Smartwatch)
@@ -234,17 +291,27 @@ In accordance with the assignment's explicit guidance, we intentionally avoid ov
 
 ---
 
-## 7. Open Architectural Questions for Alignment
+## 7. Architectural Decisions & Production Implementation Alignment
 
-Before finalizing implementation in Phase 2, the following design decisions are documented for explicit alignment:
+The design questions originally identified during preliminary research were resolved as follows:
 
-1. **Scoring Model: Flat vs. Aspect-Ratio-Weighted Scoring**:
-   - *Recommendation*: Use a normalized $[0, 100]$ score composed of visibility weight (40%), constraint compliance (30%), visual balance (20%), and whitespace economy (10%).
-2. **Measurement Engine Abstraction in Headless Tests**:
-   - *Recommendation*: Provide a fast, offline Canvas/heuristic text metrics fallback when running under Vitest/Node, while using real Canvas context metrics in browser environments.
+1. **Scoring Model: Multi-Objective Fitness Evaluation**:
+   - *Production Solution*: Implemented in `src/core/scoring.ts`. Evaluates layout candidates on a normalized $[0, 100]$ scale across four dimensions:
+     - Visibility Weight (40%): Rewards keeping declared elements visible, heavily penalizing drops of higher-priority items.
+     - Degradation Penalties (30%): Deducts points for font shrinkage, text truncation, and hero scale reductions.
+     - Visual Balance (20%): Evaluates horizontal and vertical centroid centering and alignment consistency.
+     - Whitespace Economy (10%): Rewards balanced content fill factor avoiding extreme dead space or overcrowding.
+
+2. **Measurement Engine Abstraction in Heterogeneous Environments**:
+   - *Production Solution*: Implemented `TextMeasurer` strategy interface (`src/measurement/`).
+     - In live React browser demo: `DOMTextMeasurer` uses offscreen cached DOM elements for pixel-perfect line wraps.
+     - In Canvas rendering: `CanvasTextMeasurer` uses `CanvasRenderingContext2D` or `OffscreenCanvas`.
+     - In headless CI/Vitest: `EstimateTextMeasurer` provides deterministic font-aspect heuristics with zero binary dependencies.
+
 3. **Macro Archetype Partitioning**:
-   - *Recommendation*: Use 4 primary topological archetypes:
-     - `TallStack` (aspect ratio $< 0.8$, e.g. Mobile Portrait)
-     - `BalancedSplit` (aspect ratio $0.8 \le \text{AR} \le 1.3$, e.g. Square Kiosk)
-     - `WideHorizontal` (aspect ratio $1.3 < \text{AR} \le 3.0$, e.g. Mobile Landscape)
-     - `UltraWideRibbon` (aspect ratio $> 3.0$, e.g. Broadcast Lower-Third)
+   - *Production Solution*: Formally implemented 4 geometric archetypes in `src/core/resolver.ts` derived dynamically from surface aspect ratio ($\text{AR} = \frac{W}{H}$):
+     - `TallStack` ($\text{AR} < 0.85$, e.g., Mobile Portrait)
+     - `BalancedGrid` ($0.85 \le \text{AR} \le 1.35$, e.g., Retail Kiosk Screen)
+     - `HorizontalSplit` ($1.35 < \text{AR} \le 3.5$, e.g., Mobile Landscape)
+     - `UltraWideRibbon` ($\text{AR} > 3.5$, e.g., Broadcast Lower-Third)
+
