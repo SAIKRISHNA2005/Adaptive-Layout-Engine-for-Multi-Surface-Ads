@@ -1,7 +1,8 @@
 // Live inspector displaying active surface constraints, safe area bounds, element degradation statuses, and constraint checklist.
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
+  type AdSpec,
   type ElementStatus,
   type ResolvedElement,
   type ResolvedLayout,
@@ -17,6 +18,8 @@ export interface ConstraintInspectorProps {
   readonly layout: ResolvedLayout;
   /** Structured resolution diagnostics report. */
   readonly diagnostics: ResolutionDiagnostics;
+  /** Optional source ad spec for preferred area and space pressure calculation. */
+  readonly spec?: AdSpec;
   /** Currently hovered element ID for cross-component highlighting. */
   readonly hoveredElementId?: string | null;
   /** Callback fired when hovering over an element row. */
@@ -32,19 +35,66 @@ const STATUS_BADGE_COLORS: Record<ElementStatus, { bg: string; text: string; bor
   dropped: { bg: "rgba(239, 68, 68, 0.15)", text: "#f87171", border: "rgba(239, 68, 68, 0.4)" },
 };
 
+/** Action taken label mapping. */
+const STATUS_ACTION_LABELS: Record<ElementStatus, string> = {
+  kept: "KEEP",
+  shrunk: "SHRINK",
+  repositioned: "REPOSITION",
+  truncated: "TRUNCATE",
+  dropped: "DROP",
+};
+
 /**
  * Inspection panel displaying physical surface profile attributes, per-element resolution results,
- * and live-evaluated constraint checklists.
+ * space pressure telemetry, and live-evaluated constraint checklists.
  */
 export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
   surface,
   layout,
   diagnostics,
+  spec,
   hoveredElementId,
   onHoverElement,
 }) => {
   const { summary } = diagnostics;
   const safeArea = surface.safeArea ?? { top: 0, right: 0, bottom: 0, left: 0 };
+
+  const availableW = Math.max(1, surface.width - (safeArea.left + safeArea.right));
+  const availableH = Math.max(1, surface.height - (safeArea.top + safeArea.bottom));
+  const availableContentArea = availableW * availableH;
+
+  // Compute total preferred area across elements
+  const totalPreferredArea = useMemo(() => {
+    if (!spec) return 0;
+    return spec.elements.reduce((sum, elem) => {
+      if (elem.preferredWidth && elem.preferredHeight) {
+        return sum + elem.preferredWidth * elem.preferredHeight;
+      }
+      if (elem.type === "image") {
+        const ar = elem.aspectRatio ?? 1.33;
+        const w = elem.preferredWidth ?? Math.round(availableW * 0.8);
+        const h = elem.preferredHeight ?? Math.round(w / ar);
+        return sum + w * h;
+      }
+      if (elem.type === "text") {
+        const font = elem.preferredFontSize ?? 16;
+        const estW = Math.min(availableW, font * 0.6 * elem.content.length);
+        const estLines = Math.max(1, Math.ceil((font * 0.6 * elem.content.length) / Math.max(1, availableW)));
+        const estH = estLines * font * 1.3;
+        return sum + Math.round(estW * estH);
+      }
+      if (elem.type === "button") {
+        const w = Math.max(elem.minTapTarget ?? 44, Math.round(availableW * 0.6));
+        const h = Math.max(elem.minTapTarget ?? 44, 44);
+        return sum + w * h;
+      }
+      return sum + 4000;
+    }, 0);
+  }, [spec, availableW]);
+
+  const spacePressurePct =
+    availableContentArea > 0 ? Math.round((totalPreferredArea / availableContentArea) * 100) : 0;
+  const isStressTest = surface.id === "stressTest" || spacePressurePct > 100;
 
   // Live checklist evaluation derived purely from diagnostics and layout metrics
   const checklist = [
@@ -150,7 +200,117 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
         </div>
       </div>
 
-      {/* 2. Resolved Element Status List */}
+      {/* 2. Space Pressure Telemetry & Degradation Action Table (Stress Test Feature) */}
+      {isStressTest && (
+        <div
+          data-testid="space-pressure-indicator"
+          style={{
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "10px",
+            padding: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          {/* Pressure Bar Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px" }}>🔥</span>
+              <span style={{ fontWeight: 700, color: "#f87171", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Space Pressure: {spacePressurePct}%
+              </span>
+            </div>
+            <span style={{ fontSize: "11px", color: "#fca5a5", fontFamily: "monospace" }}>
+              {totalPreferredArea.toLocaleString()}px² / {availableContentArea.toLocaleString()}px²
+            </span>
+          </div>
+
+          {/* Horizontal Pressure Gauge */}
+          <div
+            style={{
+              width: "100%",
+              height: "8px",
+              backgroundColor: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "4px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.min(100, (spacePressurePct / 250) * 100)}%`,
+                height: "100%",
+                background: spacePressurePct > 100 ? "linear-gradient(90deg, #f59e0b, #ef4444)" : "#10b981",
+                borderRadius: "4px",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+
+          {/* Compact Live Degradation Action Table */}
+          <div style={{ marginTop: "4px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Degradation Action Breakdown
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.1)", color: "#94a3b8", textAlign: "left" }}>
+                  <th style={{ padding: "4px 6px" }}>Element</th>
+                  <th style={{ padding: "4px 6px" }}>Role</th>
+                  <th style={{ padding: "4px 6px" }}>Action Taken</th>
+                  <th style={{ padding: "4px 6px", textAlign: "right" }}>Resolved Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {layout.elements.map((el) => {
+                  const badge = STATUS_BADGE_COLORS[el.status];
+                  const action = STATUS_ACTION_LABELS[el.status];
+                  const isHovered = hoveredElementId === el.id;
+
+                  return (
+                    <tr
+                      key={el.id}
+                      style={{
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
+                        backgroundColor: isHovered ? "rgba(56, 189, 248, 0.12)" : "transparent",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={() => onHoverElement?.(el.id)}
+                      onMouseLeave={() => onHoverElement?.(null)}
+                    >
+                      <td style={{ padding: "5px 6px", fontWeight: 600, color: "#f8fafc" }}>
+                        P{el.priority} {el.id}
+                      </td>
+                      <td style={{ padding: "5px 6px", color: "#94a3b8" }}>{el.role}</td>
+                      <td style={{ padding: "5px 6px" }}>
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: badge.bg,
+                            color: badge.text,
+                            border: `1px solid ${badge.border}`,
+                          }}
+                        >
+                          {action}
+                        </span>
+                      </td>
+                      <td style={{ padding: "5px 6px", textAlign: "right", color: el.visible ? "#cbd5e1" : "#64748b", fontFamily: "monospace" }}>
+                        {el.visible ? `${el.width}×${el.height}px` : "OMITTED"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Resolved Element Status List */}
       <div>
         <h3 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Element Status ({layout.elements.filter((e) => e.visible).length}/{layout.elements.length} Visible)
@@ -219,7 +379,7 @@ export const ConstraintInspector: React.FC<ConstraintInspectorProps> = ({
         </div>
       </div>
 
-      {/* 3. Live Constraints Checklist */}
+      {/* 4. Live Constraints Checklist */}
       <div>
         <h3 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Constraint Satisfaction

@@ -89,6 +89,27 @@ export const App: React.FC = () => {
               <span>Resolution: {diagnostics.summary.durationMs.toFixed(2)}ms</span>
             </div>
 
+            {selectedSurface.id === "stressTest" && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  backgroundColor: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  borderRadius: "24px",
+                  fontSize: "12px",
+                  color: "#f87171",
+                  fontWeight: 700,
+                  boxShadow: "0 2px 10px rgba(239, 68, 68, 0.2)",
+                }}
+              >
+                <span>🔥</span>
+                <span>Spatial Starvation Active</span>
+              </div>
+            )}
+
             <div
               style={{
                 padding: "8px 14px",
@@ -235,6 +256,7 @@ export const App: React.FC = () => {
             surface={selectedSurface}
             layout={layout}
             diagnostics={diagnostics}
+            spec={defaultDemoAdSpec}
             hoveredElementId={hoveredElementId}
             onHoverElement={setHoveredElementId}
           />

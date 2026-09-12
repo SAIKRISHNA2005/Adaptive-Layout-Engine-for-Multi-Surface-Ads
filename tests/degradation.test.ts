@@ -1,8 +1,9 @@
 // Test suite verifying predictable priority degradation ordering and zero clipping/overflow under spatial starvation.
 import { describe, it, expect } from "vitest";
 import { defineAd } from "../src/core/spec";
-import { defineSurface, retailKiosk } from "../src/core/surfaces";
+import { defineSurface, retailKiosk, stressTestSurface } from "../src/core/surfaces";
 import { resolve } from "../src/core/resolver";
+import { defaultDemoAdSpec } from "../src/demo/adSpec";
 import { type ResolvedElement, type ResolvedLayout } from "../src/core/types";
 
 describe("Priority-Based Degradation Engine (Phase 4b)", () => {
@@ -180,5 +181,35 @@ describe("Priority-Based Degradation Engine (Phase 4b)", () => {
     // Branding is dropped before CTA is compromised
     expect(logo?.visible).toBe(false);
     expect(logo?.status).toBe("dropped");
+  });
+
+  it("degrades gracefully under Phase 10 Stress Test surface (branding dropped, price truncated, headline/CTA intact)", () => {
+    const layout = resolve(defaultDemoAdSpec, stressTestSurface);
+
+    const headline = layout.elements.find((el) => el.id === "headline");
+    const branding = layout.elements.find((el) => el.id === "brand-logo");
+    const price = layout.elements.find((el) => el.id === "price-tag");
+    const cta = layout.elements.find((el) => el.id === "cta-button");
+
+    // headline.status is "kept" or "shrunk" (never "dropped")
+    expect(headline).toBeDefined();
+    expect(headline?.visible).toBe(true);
+    expect(["kept", "shrunk"]).toContain(headline?.status);
+
+    // branding's status is "dropped"
+    expect(branding).toBeDefined();
+    expect(branding?.visible).toBe(false);
+    expect(branding?.status).toBe("dropped");
+
+    // price is truncated
+    expect(price).toBeDefined();
+    expect(price?.visible).toBe(true);
+    expect(price?.status).toBe("truncated");
+
+    // cta's final height/width both >= surface.minTapTarget
+    expect(cta).toBeDefined();
+    expect(cta?.visible).toBe(true);
+    expect(cta?.width).toBeGreaterThanOrEqual(stressTestSurface.minTapTarget ?? 44);
+    expect(cta?.height).toBeGreaterThanOrEqual(stressTestSurface.minTapTarget ?? 44);
   });
 });

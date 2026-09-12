@@ -6,6 +6,7 @@ import {
   mobileLandscape,
   mobilePortrait,
   retailKiosk,
+  stressTestSurface,
 } from "../core/surfaces";
 import { type SurfaceProfile } from "../core/types";
 
@@ -15,6 +16,7 @@ export const DEMO_SURFACES: readonly SurfaceProfile[] = [
   mobileLandscape,
   broadcastLowerThird,
   retailKiosk,
+  stressTestSurface,
 ];
 
 /** Props for the SurfacePicker component. */

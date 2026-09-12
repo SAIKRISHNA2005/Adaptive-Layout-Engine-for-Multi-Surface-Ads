@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ConstraintInspector } from "../src/demo/ConstraintInspector";
-import { mobilePortrait, broadcastLowerThird } from "../src/core/surfaces";
+import { mobilePortrait, broadcastLowerThird, stressTestSurface } from "../src/core/surfaces";
 import { resolveWithDiagnostics } from "../src/core/resolver";
 import { defaultDemoAdSpec } from "../src/demo/adSpec";
 
@@ -89,5 +89,25 @@ describe("ConstraintInspector (Phase 8)", () => {
       fireEvent.mouseLeave(headlineRow);
       expect(handleHover).toHaveBeenCalledWith(null);
     }
+  });
+
+  it("renders space pressure gauge and degradation action table under stressTestSurface", () => {
+    const stressResult = resolveWithDiagnostics(defaultDemoAdSpec, stressTestSurface);
+    render(
+      <ConstraintInspector
+        surface={stressTestSurface}
+        layout={stressResult.layout}
+        diagnostics={stressResult.diagnostics}
+        spec={defaultDemoAdSpec}
+      />,
+    );
+
+    expect(screen.getByTestId("space-pressure-indicator")).toBeInTheDocument();
+    expect(screen.getByText(/Space Pressure:/i)).toBeInTheDocument();
+    expect(screen.getByText("Degradation Action Breakdown")).toBeInTheDocument();
+
+    // Table rows exist with action badges
+    expect(screen.getAllByText("DROP").length).toBeGreaterThan(0); // brand-logo is dropped
+    expect(screen.getAllByText("TRUNCATE").length).toBeGreaterThan(0); // price-tag is truncated
   });
 });

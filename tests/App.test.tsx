@@ -59,4 +59,18 @@ describe("App Shell (Phase 7 & 8 - Multi-Surface Live Switching & Tooling)", () 
     expect(container.style.width).toBe("1080px");
     expect(container.style.height).toBe("1080px");
   });
+
+  it("switches to Stress Test surface displaying space pressure gauge and spatial starvation notice", () => {
+    render(<App />);
+
+    const stressTab = screen.getByRole("tab", { name: /Stress Test/i });
+    fireEvent.click(stressTab);
+
+    const container = screen.getByTestId("rendered-ad-container");
+    expect(container.style.width).toBe("240px");
+    expect(container.style.height).toBe("320px");
+
+    expect(screen.getByText(/Spatial Starvation Active/i)).toBeInTheDocument();
+    expect(screen.getByTestId("space-pressure-indicator")).toBeInTheDocument();
+  });
 });

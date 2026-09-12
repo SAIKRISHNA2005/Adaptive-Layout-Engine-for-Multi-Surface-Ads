@@ -600,7 +600,7 @@ function degradeElement(state: ElementWorkingState, surface: SurfaceProfile): st
   const isDroppable =
     state.original.canDrop === true ||
     (state.original.canDrop !== false &&
-      (state.role === "branding" || state.role === "secondary" || state.priority >= 3));
+      (state.role === "branding" || state.priority >= 3));
 
   if (state.role === "branding" || (state.priority >= 3 && isDroppable)) {
     if (state.ladderStep === 1) {

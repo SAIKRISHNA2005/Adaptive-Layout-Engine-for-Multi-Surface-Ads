@@ -85,6 +85,18 @@ export const retailKiosk: Readonly<SurfaceProfile> = defineSurface({
   viewingDistance: "medium",
 });
 
+/** Stress test surface profile (240x320, spatial starvation, 44px min tap target). */
+export const stressTestSurface: Readonly<SurfaceProfile> = defineSurface({
+  id: "stressTest",
+  name: "Stress Test",
+  width: 240,
+  height: 320,
+  safeArea: { top: 12, right: 10, bottom: 12, left: 10 },
+  minTapTarget: 44,
+  touchOnly: true,
+  viewingDistance: "near",
+});
+
 /** Standard library of preset multi-surface profiles. */
 export const surfaces: Readonly<Record<string, Readonly<SurfaceProfile>>> = deepFreeze({
   mobilePortrait,
@@ -92,4 +104,5 @@ export const surfaces: Readonly<Record<string, Readonly<SurfaceProfile>>> = deep
   mobileLandscape,
   broadcastLowerThird,
   retailKiosk,
+  stressTest: stressTestSurface,
 });
